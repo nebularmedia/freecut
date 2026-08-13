@@ -50,11 +50,20 @@ async function requestOnce(): Promise<boolean> {
     }
 
     const granted = await navigator.storage.persist()
-    logger.info(
-      granted
-        ? 'Storage is now persisted — workspace permissions survive disk pressure'
-        : 'Storage persistence denied — workspace permissions may be evicted',
-    )
+    // Two levels on purpose. A grant is a fact you never need to act on; a
+    // denial means the workspace handles can be evicted, and that is worth
+    // seeing. It matters because a production build starts the logger at WARN,
+    // so anything below it is dropped — on 2026-08-13 the denial went out as
+    // `info` and four rounds were spent looking for a message that could not
+    // appear. The level IS the interface here.
+    if (granted) {
+      logger.info('Storage is now persisted — workspace permissions survive disk pressure')
+    } else {
+      logger.warn(
+        'Storage persistence denied by the browser — workspace permissions may be evicted ' +
+          'under disk pressure. Nothing is lost if that happens: the folders have to be picked again.',
+      )
+    }
     return granted
   } catch (error) {
     logger.warn('Storage persistence request failed', error)
