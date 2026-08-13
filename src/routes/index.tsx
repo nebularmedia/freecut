@@ -1,14 +1,11 @@
 import { createFileRoute, Link } from '@tanstack/react-router'
-import { useEffect, useState } from 'react'
 import { Trans, useTranslation } from 'react-i18next'
 import {
   Layers,
   ArrowRight,
   Play,
   Download,
-  Star,
   ExternalLink,
-  BookOpen,
   Search,
   AudioLines,
   Keyboard,
@@ -17,14 +14,7 @@ import {
   WandSparkles,
 } from 'lucide-react'
 import { FreeCutLogo } from '@/components/brand/freecut-logo'
-import { DiscordIcon } from '@/components/brand/discord-icon'
 import { Button } from '@/components/ui/button'
-import { DISCORD_INVITE_URL } from '@/config/community'
-import {
-  isGitHubStarsCacheFresh,
-  readGitHubStarsCache,
-  refreshGitHubStarCount,
-} from '@/shared/utils/github-stars'
 import {
   Accordion,
   AccordionContent,
@@ -95,37 +85,12 @@ const showcaseItems = [
   },
 ]
 
-function useGitHubStarCount(): number | null {
-  const [initialCache] = useState(readGitHubStarsCache)
-  const [starCount, setStarCount] = useState<number | null>(initialCache?.stars ?? null)
-
-  useEffect(() => {
-    if (initialCache && isGitHubStarsCacheFresh(initialCache)) return
-
-    let active = true
-    void refreshGitHubStarCount().then((count) => {
-      if (active && count !== null) setStarCount(count)
-    })
-    return () => {
-      active = false
-    }
-  }, [initialCache])
-
-  return starCount
-}
-
-function GitHubStarCount({ count }: { count: number | null }) {
-  if (count === null) return null
-  return (
-    <span className="rounded-md bg-primary/10 px-1.5 py-0.5 text-xs tabular-nums text-primary">
-      {new Intl.NumberFormat().format(count)}
-    </span>
-  )
-}
+// El contador de estrellas de GitHub se fue con su botón — 2026-08-13. Era una
+// petición a api.github.com en cada carga de la portada para pintar un número
+// que ya no se enseña. `shared/utils/github-stars` sigue ahí, sin usos.
 
 function LandingPage() {
   const { t } = useTranslation()
-  const githubStarCount = useGitHubStarCount()
   const faqItems: Array<{ id?: string; question: string; answer: React.ReactNode }> = [
     {
       question: t('projects.landing.faq.free.question'),
@@ -244,31 +209,7 @@ function LandingPage() {
               </Link>
             </Button>
 
-            <Button asChild variant="outline" size="lg" className="gap-2">
-              <Link to="/docs">
-                <BookOpen className="h-4 w-4" />
-                Docs
-              </Link>
-            </Button>
-
-            <Button asChild variant="outline" size="lg" className="gap-2">
-              <a href={DISCORD_INVITE_URL} target="_blank" rel="noopener noreferrer">
-                <DiscordIcon className="h-4 w-4" />
-                Join Discord
-              </a>
-            </Button>
-
-            <Button asChild variant="outline" size="lg" className="gap-2">
-              <a
-                href="https://github.com/walterlow/freecut"
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                <Star className="h-4 w-4" />
-                {t('projects.landing.starOnGitHub')}
-                <GitHubStarCount count={githubStarCount} />
-              </a>
-            </Button>
+            {/* Docs, Discord y GitHub: fuera. Ver `src/config/community.ts`. */}
           </div>
         </div>
       </section>
@@ -393,31 +334,7 @@ function LandingPage() {
               </Link>
             </Button>
 
-            <Button asChild variant="outline" size="lg" className="gap-2">
-              <Link to="/docs">
-                <BookOpen className="h-4 w-4" />
-                Docs
-              </Link>
-            </Button>
-
-            <Button asChild variant="outline" size="lg" className="gap-2">
-              <a href={DISCORD_INVITE_URL} target="_blank" rel="noopener noreferrer">
-                <DiscordIcon className="h-4 w-4" />
-                Join Discord
-              </a>
-            </Button>
-
-            <Button asChild variant="outline" size="lg" className="gap-2">
-              <a
-                href="https://github.com/walterlow/freecut"
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                <Star className="h-4 w-4" />
-                {t('projects.landing.starOnGitHub')}
-                <GitHubStarCount count={githubStarCount} />
-              </a>
-            </Button>
+            {/* Docs, Discord y GitHub: fuera. Ver `src/config/community.ts`. */}
           </div>
         </div>
       </section>

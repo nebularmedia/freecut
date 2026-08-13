@@ -3,12 +3,10 @@ import { useNavigate } from '@tanstack/react-router'
 import { useTranslation } from 'react-i18next'
 import {
   ArrowLeft,
-  BookOpen,
   Bug,
   ChevronDown,
   Download,
   FolderArchive,
-  Github,
   Keyboard,
   ListVideo,
   Save,
@@ -17,8 +15,6 @@ import {
   Video,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { DiscordIcon } from '@/components/brand/discord-icon'
-import { DISCORD_INVITE_URL } from '@/config/community'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -98,18 +94,15 @@ export const Toolbar = memo(function Toolbar({
   const maxItemEndFrame = useItemsStore((state) => state.maxItemEndFrame)
   const mediaDependencyIds = useItemsStore((state) => state.mediaDependencyIds)
   const brokenMediaIds = useMediaLibraryStore((state) => state.brokenMediaIds)
-  const projectSummary = useMemo(
-    () => {
-      const projectMediaIds = new Set(mediaDependencyIds)
-      return {
-        durationSeconds: project.fps > 0 ? maxItemEndFrame / project.fps : 0,
-        clipCount: itemCount,
-        mediaCount: mediaDependencyIds.length,
-        brokenMediaCount: brokenMediaIds.filter((mediaId) => projectMediaIds.has(mediaId)).length,
-      }
-    },
-    [brokenMediaIds, itemCount, maxItemEndFrame, mediaDependencyIds, project.fps],
-  )
+  const projectSummary = useMemo(() => {
+    const projectMediaIds = new Set(mediaDependencyIds)
+    return {
+      durationSeconds: project.fps > 0 ? maxItemEndFrame / project.fps : 0,
+      clipCount: itemCount,
+      mediaCount: mediaDependencyIds.length,
+      brokenMediaCount: brokenMediaIds.filter((mediaId) => projectMediaIds.has(mediaId)).length,
+    }
+  }, [brokenMediaIds, itemCount, maxItemEndFrame, mediaDependencyIds, project.fps])
 
   useEffect(() => {
     setHasUnseenWhatsNew(hasUnseenChangelog())
@@ -229,47 +222,9 @@ export const Toolbar = memo(function Toolbar({
           <DebugPopover projectId={projectId} />
         )}
 
-        {/* Socials */}
-        <Button variant="outline" size="icon" className="h-7 w-7" asChild>
-          <a
-            href="https://github.com/walterlow/freecut"
-            target="_blank"
-            rel="noopener noreferrer"
-            data-tooltip={t('toolbar.viewOnGitHub')}
-            data-tooltip-side="bottom"
-            aria-label={t('toolbar.viewOnGitHub')}
-          >
-            <Github className="h-4 w-4" />
-          </a>
-        </Button>
-        <Button variant="outline" size="icon" className="h-7 w-7" asChild>
-          <a
-            href={DISCORD_INVITE_URL}
-            target="_blank"
-            rel="noopener noreferrer"
-            data-tooltip={t('toolbar.joinDiscord')}
-            data-tooltip-side="bottom"
-            aria-label={t('toolbar.joinDiscord')}
-          >
-            <DiscordIcon className="h-4 w-4" />
-          </a>
-        </Button>
-
-        <Separator orientation="vertical" className="h-5" />
+        {/* Socials, docs y GitHub: fuera. Ver `src/config/community.ts`. */}
 
         {/* Utility */}
-        <Button variant="outline" size="icon" className="h-7 w-7" asChild>
-          <a
-            href="/docs"
-            target="_blank"
-            rel="noopener noreferrer"
-            data-tooltip="User Guide"
-            data-tooltip-side="bottom"
-            aria-label="User Guide"
-          >
-            <BookOpen className="h-4 w-4" />
-          </a>
-        </Button>
         <Button
           variant="outline"
           size="icon"
