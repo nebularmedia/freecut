@@ -31,8 +31,10 @@ import {
 } from '@/infrastructure/storage/handles-db'
 import { onPermissionLost, setWorkspaceRoot } from '@/infrastructure/storage/workspace-fs/root'
 import { createLogger } from '@/shared/logging/logger'
+import { ensurePersistentStorage } from '@/shared/storage/persistent-storage'
 import { WorkspaceGateSplash } from './workspace-gate-splash'
 import { usePathname } from './use-pathname'
+import { activateWorkspaceFromUrl } from './workspace-from-url'
 
 /**
  * Routes that read/write the workspace and therefore need the gate to be
@@ -61,6 +63,13 @@ export function WorkspaceGate({ children }: { children: React.ReactNode }) {
 
   const activate = useCallback(async (handle: FileSystemDirectoryHandle) => {
     setWorkspaceRoot(handle)
+    // A stored handle is a permission, not data: it can't be rebuilt from a
+    // path, so an eviction costs one directory pick per workspace. Asked here
+    // and not in `handlePick` on purpose — this is the choke point every route
+    // in (first pick, reconnect, restore on load) passes through, so someone who
+    // linked their workspaces before this existed still gets asked. Memoized and
+    // never awaited: it must not delay the editor showing up.
+    void ensurePersistentStorage()
     try {
       const { bootstrapWorkspace } = await import('@/infrastructure/storage/workspace-fs/bootstrap')
       await bootstrapWorkspace(handle)
@@ -91,6 +100,10 @@ export function WorkspaceGate({ children }: { children: React.ReactNode }) {
       // record before we read it, so the indicator's "known workspaces" list
       // includes the one the user is about to use.
       await ensureKnownWorkspaceForCurrent()
+      // An incoming link may name the workspace it needs (`?workspace=…`).
+      // Resolved before reading the current record, so the rest of the gate
+      // sees the switch as if it had always been the active one.
+      await activateWorkspaceFromUrl()
       const record = await getWorkspaceHandleRecord()
       if (!record) {
         if (!cancelled) setStatus({ kind: 'pick' })
