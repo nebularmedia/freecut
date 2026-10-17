@@ -88,7 +88,14 @@
       "unreverse": "Desfazer reversao",
       "updatingCaptions": "Atualizando legendas",
       "copyGrade": "Copiar correção de cor",
-      "pasteGrade": "Colar correção de cor"
+      "pasteGrade": "Colar correção de cor",
+      "stabilizeClip": "Estabilizar clipe",
+      "stabilizing": "Estabilizando…",
+      "stabilizeStrength": {
+        "gentle": "Suave — corte de {{crop}}%",
+        "standard": "Padrão — corte de {{crop}}%",
+        "strong": "Forte — corte de {{crop}}%"
+      }
     },
     "fadeHandles": {
       "adjustAudioFadeIn": "Ajustar fade de entrada do audio",
@@ -319,8 +326,10 @@
       "enableSyncLock": "Ativar bloqueio de sincronia",
       "enableTrack": "Ativar faixa",
       "lockTrack": "Bloquear faixa",
+      "muteTrack": "Silenciar faixa",
       "soloTrack": "Faixa solo",
       "unlockTrack": "Desbloquear faixa",
+      "unmuteTrack": "Reativar som da faixa",
       "unsoloTrack": "Remover solo da faixa"
     },
     "trackRow": {
@@ -337,6 +346,12 @@
       "adjustClipVolume": "Ajustar volume do clipe"
     },
     "emptyTitle": "Arraste mídia aqui para começar a editar",
-    "emptyDescription": "Solte clipes nas faixas e pressione Espaço para visualizar."
+    "emptyDescription": "Solte clipes nas faixas e pressione Espaço para visualizar.",
+    "stabilize": {
+      "analyzing": "Medindo o movimento da câmera",
+      "rendering": "Estabilizando",
+      "toastDone": "Clipe estabilizado",
+      "toastFailed": "Não foi possível aplicar o clipe estabilizado"
+    }
   }
 }

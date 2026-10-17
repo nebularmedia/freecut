@@ -127,10 +127,7 @@ const easing = z.enum([
 const easingConfigSchema = z
   .object({
     type: easing,
-    bezier: z
-      .object({ x1: finite, y1: finite, x2: finite, y2: finite })
-      .strict()
-      .optional(),
+    bezier: z.object({ x1: finite, y1: finite, x2: finite, y2: finite }).strict().optional(),
     spring: z
       .object({
         tension: z.number().min(0).max(500),
@@ -554,6 +551,7 @@ const RENDER_OPTIONS = {
   codecs: ['h264', 'h265', 'vp9', 'vp8', 'av1'],
   containers: ['mp4', 'webm', 'mov', 'mkv', 'mp3', 'wav', 'm4a'],
   qualities: ['low', 'medium', 'high', 'ultra'],
+  mediaQualities: ['original', 'proxy'],
 }
 export const renderRequestSchema = z
   .object({
@@ -572,6 +570,9 @@ export const renderRequestSchema = z
       .optional(),
     fps: finite.min(1).max(240).optional(),
     quality: z.enum(RENDER_OPTIONS.qualities).optional(),
+    // Which copy of each source to read: the original, or the light proxy a
+    // linked media points at (media/{id}/source.link.json).
+    mediaQuality: z.enum(RENDER_OPTIONS.mediaQualities).optional(),
     inSec: finite.nonnegative().optional(),
     outSec: finite.positive().optional(),
     duration: finite.positive().optional(),
@@ -627,10 +628,12 @@ export function normalizeRenderInput(value) {
   if (out.in !== undefined) out.inSec = Number(out.in)
   if (out['out-sec'] !== undefined) out.outSec = Number(out['out-sec'])
   if (out['audio-only'] !== undefined) out.audioOnly = Boolean(out['audio-only'])
+  if (out['media-quality'] !== undefined) out.mediaQuality = String(out['media-quality'])
   if (out.strict !== undefined) out.strict = Boolean(out.strict)
   delete out.in
   delete out['out-sec']
   delete out['audio-only']
+  delete out['media-quality']
   for (const key of ['fps', 'duration']) if (out[key] !== undefined) out[key] = Number(out[key])
   return out
 }

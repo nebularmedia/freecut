@@ -662,6 +662,8 @@ export const TimelineItem = memo(function TimelineItem({
     handleEnterComposition,
     handleDissolveComposition,
     handleDetectScenes,
+    handleStabilizeClip,
+    isStabilizing,
     handleRemoveSilence,
     handleRemoveFillers,
     isRemovingFillers,
@@ -910,6 +912,11 @@ export const TimelineItem = memo(function TimelineItem({
           canDetectScenes: item.type === 'video' && !!item.mediaId && !isBroken,
           isDetectingScenes: isSceneDetectionActive,
           onDetectScenes: handleDetectScenes,
+        }}
+        stabilizeActions={{
+          canStabilize: item.type === 'video' && !!item.mediaId && !isBroken,
+          isStabilizing,
+          onStabilize: handleStabilizeClip,
         }}
         destructiveActions={{
           isSelected,

@@ -300,6 +300,10 @@
       "importAnyway": "Yine de içe aktar",
       "note": "Not",
       "title": "Desteklenmeyen codec"
+    },
+    "autoProxy": {
+      "queued_one": "Oynatma akıcı kalsın diye 1 ağır klibin hafif kopyası oluşturuluyor",
+      "queued_other": "Oynatma akıcı kalsın diye {{count}} ağır klibin hafif kopyaları oluşturuluyor"
     }
   }
 }

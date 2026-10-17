@@ -88,7 +88,14 @@
       "unreverse": "Annuler inversion",
       "updatingCaptions": "Mise a jour Sous-titres",
       "copyGrade": "Copier l'étalonnage",
-      "pasteGrade": "Coller l'étalonnage"
+      "pasteGrade": "Coller l'étalonnage",
+      "stabilizeClip": "Stabiliser le clip",
+      "stabilizing": "Stabilisation…",
+      "stabilizeStrength": {
+        "gentle": "Légère — recadrage de {{crop}} %",
+        "standard": "Standard — recadrage de {{crop}} %",
+        "strong": "Forte — recadrage de {{crop}} %"
+      }
     },
     "fadeHandles": {
       "adjustAudioFadeIn": "Ajuster Audio fondu entree",
@@ -319,8 +326,10 @@
       "enableSyncLock": "Activer synchro verrou",
       "enableTrack": "Activer Piste",
       "lockTrack": "verrou Piste",
+      "muteTrack": "Couper le son de la piste",
       "soloTrack": "solo Piste",
       "unlockTrack": "deverrouiller Piste",
+      "unmuteTrack": "Retablir le son de la piste",
       "unsoloTrack": "retirer solo Piste"
     },
     "trackRow": {
@@ -337,6 +346,12 @@
       "adjustClipVolume": "Ajuster clip volume"
     },
     "emptyTitle": "Faites glisser des médias ici pour commencer le montage",
-    "emptyDescription": "Déposez des clips sur les pistes, puis appuyez sur Espace pour prévisualiser."
+    "emptyDescription": "Déposez des clips sur les pistes, puis appuyez sur Espace pour prévisualiser.",
+    "stabilize": {
+      "analyzing": "Mesure du mouvement de caméra",
+      "rendering": "Stabilisation",
+      "toastDone": "Clip stabilisé",
+      "toastFailed": "Impossible d'appliquer le clip stabilisé"
+    }
   }
 }

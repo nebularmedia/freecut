@@ -11,6 +11,8 @@ import {
 } from '@/features/timeline/utils/zoom-conversions'
 import { useSnapCalculator } from './use-snap-calculator'
 import { findNearestAvailableSpace } from '../utils/collision-utils'
+import { getMagnetTrackId, planMagnetPlacement } from '../utils/magnet-track'
+import { useUiMotionProfile } from '../deps/settings'
 import { getTrackKind } from '../utils/classic-tracks'
 import {
   expandItemIdsWithAttachedCaptions,
@@ -463,6 +465,12 @@ export function useTimelineDrag(
   const duplicateItems = useTimelineStore((s) => s.duplicateItems)
   const duplicateItemsWithTrackChanges = useTimelineStore((s) => s.duplicateItemsWithTrackChanges)
   const tracks = useTimelineStore((s) => s.tracks)
+  // CapCut motion keeps the bottom video track gapless: a drop into it inserts
+  // and pushes instead of hunting for a hole. Read through a ref so the drag
+  // callbacks stay stable.
+  const mainTrackMagnet = useUiMotionProfile().mainTrackMagnet
+  const mainTrackMagnetRef = useRef(mainTrackMagnet)
+  mainTrackMagnetRef.current = mainTrackMagnet
   // NOTE: Don't subscribe to items here! Every TimelineItem has this hook,
   // subscribing to items would cause ALL items to re-render when ANY item changes.
   // Instead, read items on-demand in callbacks using getState().
@@ -1425,52 +1433,84 @@ export function useTimelineDrag(
         // Clamp after snapping to ensure we don't go below frame 0
         proposedFrame = Math.max(0, snapResult.snappedFrame)
 
-        // Find nearest available space (snaps forward if collision)
-        // For alt-drag, include the original item in collision check since it stays in place
-        const itemsExcludingDragged = isAltDrag
-          ? currentItems
-          : currentItems.filter((i) => i.id !== item.id)
-        const finalFrame = findNearestAvailableSpace(
-          proposedFrame,
-          item.durationInFrames,
-          newTrackId,
-          itemsExcludingDragged,
-        )
+        // Magnet track: reorder instead of looking for a hole. Alt-drag keeps
+        // the ordinary duplicate path — CapCut has no magnet duplicate either.
+        const magnetTrackId = mainTrackMagnetRef.current
+          ? getMagnetTrackId(tracksRef.current)
+          : null
+        const magnetPlacement =
+          !isAltDrag && magnetTrackId !== null && newTrackId === magnetTrackId
+            ? planMagnetPlacement({
+                items: currentItems,
+                trackId: magnetTrackId,
+                movedItemId: item.id,
+                dropFrame: proposedFrame,
+              })
+            : null
 
-        if (finalFrame !== null) {
-          const roundedFinalFrame = Math.round(finalFrame)
-          if (isAltDrag) {
-            // ALT-DRAG: Duplicate item at new position
+        if (magnetPlacement) {
+          if (magnetPlacement.updates.length > 0) {
             if (resolvedTrackTargets) {
-              duplicateItemsWithTrackChangesRef.current(
+              moveItemsWithTrackChangesRef.current(
                 resolvedTrackTargets.tracks,
-                [item.id],
-                [{ from: roundedFinalFrame, trackId: newTrackId }],
+                magnetPlacement.updates,
               )
             } else {
-              duplicateItemsRef.current(
-                [item.id],
-                [{ from: roundedFinalFrame, trackId: newTrackId }],
-              )
-            }
-          } else {
-            // Normal drag: Move item
-            const trackChanged = newTrackId !== dragState.startTrackId
-            if (resolvedTrackTargets) {
-              moveItemsWithTrackChangesRef.current(resolvedTrackTargets.tracks, [
-                { id: item.id, from: roundedFinalFrame, trackId: newTrackId },
-              ])
-            } else {
-              moveItemRef.current(item.id, roundedFinalFrame, trackChanged ? newTrackId : undefined)
+              moveItemsRef.current(magnetPlacement.updates)
             }
           }
         } else {
-          // No space available - cancel drag (keep at original position)
-          logger.warn(
-            isAltDrag
-              ? 'Cannot duplicate item: no available space'
-              : 'Cannot move item: no available space',
+          // Find nearest available space (snaps forward if collision)
+          // For alt-drag, include the original item in collision check since it stays in place
+          const itemsExcludingDragged = isAltDrag
+            ? currentItems
+            : currentItems.filter((i) => i.id !== item.id)
+          const finalFrame = findNearestAvailableSpace(
+            proposedFrame,
+            item.durationInFrames,
+            newTrackId,
+            itemsExcludingDragged,
           )
+
+          if (finalFrame !== null) {
+            const roundedFinalFrame = Math.round(finalFrame)
+            if (isAltDrag) {
+              // ALT-DRAG: Duplicate item at new position
+              if (resolvedTrackTargets) {
+                duplicateItemsWithTrackChangesRef.current(
+                  resolvedTrackTargets.tracks,
+                  [item.id],
+                  [{ from: roundedFinalFrame, trackId: newTrackId }],
+                )
+              } else {
+                duplicateItemsRef.current(
+                  [item.id],
+                  [{ from: roundedFinalFrame, trackId: newTrackId }],
+                )
+              }
+            } else {
+              // Normal drag: Move item
+              const trackChanged = newTrackId !== dragState.startTrackId
+              if (resolvedTrackTargets) {
+                moveItemsWithTrackChangesRef.current(resolvedTrackTargets.tracks, [
+                  { id: item.id, from: roundedFinalFrame, trackId: newTrackId },
+                ])
+              } else {
+                moveItemRef.current(
+                  item.id,
+                  roundedFinalFrame,
+                  trackChanged ? newTrackId : undefined,
+                )
+              }
+            }
+          } else {
+            // No space available - cancel drag (keep at original position)
+            logger.warn(
+              isAltDrag
+                ? 'Cannot duplicate item: no available space'
+                : 'Cannot move item: no available space',
+            )
+          }
         }
       }
 

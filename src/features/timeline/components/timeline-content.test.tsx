@@ -12,10 +12,17 @@ import { _resetViewportThrottle, useTimelineViewportStore } from '../stores/time
 import { useTimelineStore } from '../stores/timeline-store'
 import { useItemsStore } from '../stores/items-store'
 import { _resetZoomStoreForTest, useZoomStore } from '../stores/zoom-store'
-import { TIMELINE_RULER_HEIGHT, ZOOM_MAX, ZOOM_MIN } from '../constants'
+import {
+  SCROLL_SENSITIVITY,
+  SCROLL_STEP_GAIN,
+  TIMELINE_RULER_HEIGHT,
+  ZOOM_MAX,
+  ZOOM_MIN,
+} from '../constants'
 import { TimelineContent } from './timeline-content'
 import { getTimelineZoomInteractionShieldBounds } from '../utils/timeline-zoom-interaction-shield'
 import { TIMELINE_LIVE_SCROLL_EVENT } from '@/shared/timeline/live-scroll-sync'
+import { useSettingsStore } from '../deps/settings'
 
 const perfMarkMocks = vi.hoisted(() => ({
   mark: vi.fn(),
@@ -153,6 +160,9 @@ beforeAll(() => {
 
 function resetStores() {
   _resetZoomStoreForTest()
+  // Wheel behaviour is per motion mode. These cases describe the travelling
+  // wheel, so pin the mode that owns it; the zooming wheel has its own case.
+  useSettingsStore.setState({ uiMotionMode: 'freecut', timelineWheel: 'auto' })
   useEditorStore.setState({
     linkedSelectionEnabled: true,
     transcriptionDialogDepth: 0,
@@ -475,6 +485,146 @@ describe('TimelineContent playback selection behavior', () => {
 
     expect(scrollContainer.scrollLeft).toBeGreaterThan(0)
     expect(liveScroll).toHaveBeenCalledOnce()
+
+    unmount()
+    animationFrameSpy.mockRestore()
+  })
+
+  it('walks the tracks in CapCut motion even when the pointer is off the panes', () => {
+    useSettingsStore.setState({ uiMotionMode: 'capcut' })
+    const { container, unmount } = render(<TimelineContent duration={100} tracks={[VIDEO_TRACK]} />)
+    const scrollContainer = container.querySelector('[data-timeline-scroll-container]')
+    const pane = container.querySelector('[data-track-section-scroll]')
+    if (!(scrollContainer instanceof HTMLDivElement) || !(pane instanceof HTMLDivElement)) {
+      throw new Error('Expected timeline scroll container and a track pane')
+    }
+
+    // The wheel event lands on the surface itself, outside any track pane.
+    fireEvent.wheel(scrollContainer, { deltaY: 120 })
+    expect(pane.scrollTop).toBeCloseTo(120 * SCROLL_SENSITIVITY * SCROLL_STEP_GAIN)
+    expect(scrollContainer.scrollLeft).toBe(0)
+
+    unmount()
+  })
+
+  it('parks the playhead where you click in CapCut motion, tracks or empty room', () => {
+    useSettingsStore.setState({ uiMotionMode: 'capcut' })
+    const { container, unmount } = render(<TimelineContent duration={100} tracks={[VIDEO_TRACK]} />)
+    const scrollContainer = container.querySelector('[data-timeline-scroll-container]')
+    if (!(scrollContainer instanceof HTMLDivElement)) {
+      throw new Error('Expected timeline scroll container')
+    }
+    Object.defineProperty(scrollContainer, 'getBoundingClientRect', {
+      configurable: true,
+      value: () => ({
+        left: 0,
+        top: 0,
+        right: 800,
+        bottom: 300,
+        width: 800,
+        height: 300,
+        x: 0,
+        y: 0,
+        toJSON: () => ({}),
+      }),
+    })
+
+    // The surface itself, not a track row: at 100px per second and 30fps a
+    // click 200px in lands on frame 60.
+    act(() => {
+      fireEvent.click(scrollContainer, { clientX: 200, clientY: 250 })
+    })
+    expect(usePlaybackStore.getState().currentFrame).toBe(60)
+
+    // A click on a clip belongs to the clip: it selects, it does not seek.
+    const clipEl = container.querySelector('[data-item-id]')
+    if (clipEl) {
+      act(() => {
+        fireEvent.click(clipEl, { clientX: 400, clientY: 100 })
+      })
+      expect(usePlaybackStore.getState().currentFrame).toBe(60)
+    }
+
+    unmount()
+  })
+
+  it('leaves the playhead alone on a background click in FreeCut motion', () => {
+    const { container, unmount } = render(<TimelineContent duration={100} tracks={[VIDEO_TRACK]} />)
+    const scrollContainer = container.querySelector('[data-timeline-scroll-container]')
+    if (!(scrollContainer instanceof HTMLDivElement)) {
+      throw new Error('Expected timeline scroll container')
+    }
+
+    const before = usePlaybackStore.getState().currentFrame
+    act(() => {
+      fireEvent.click(scrollContainer, { clientX: 200, clientY: 250 })
+    })
+    expect(usePlaybackStore.getState().currentFrame).toBe(before)
+
+    unmount()
+  })
+
+  it('keeps FreeCut motion gliding: the wheel seeds momentum instead of stepping', () => {
+    const frameCallbacks: FrameRequestCallback[] = []
+    const animationFrameSpy = vi
+      .spyOn(window, 'requestAnimationFrame')
+      .mockImplementation((callback) => {
+        frameCallbacks.push(callback)
+        return frameCallbacks.length
+      })
+    const { container, unmount } = render(<TimelineContent duration={100} tracks={[VIDEO_TRACK]} />)
+    const scrollContainer = container.querySelector('[data-timeline-scroll-container]')
+    if (!(scrollContainer instanceof HTMLDivElement)) {
+      throw new Error('Expected timeline scroll container')
+    }
+
+    // Nothing moves until the momentum loop runs, and it keeps coasting after.
+    fireEvent.wheel(scrollContainer, { deltaY: 120 })
+    expect(scrollContainer.scrollLeft).toBe(0)
+
+    act(() => frameCallbacks.shift()?.(performance.now()))
+    const afterFirstFrame = scrollContainer.scrollLeft
+    expect(afterFirstFrame).toBeGreaterThan(0)
+
+    act(() => frameCallbacks.shift()?.(performance.now()))
+    expect(scrollContainer.scrollLeft).toBeGreaterThan(afterFirstFrame)
+
+    unmount()
+    animationFrameSpy.mockRestore()
+  })
+
+  it('gives CapCut motion the tracks on a bare wheel and the timeline on alt', () => {
+    useSettingsStore.setState({ uiMotionMode: 'capcut' })
+    const frameCallbacks: FrameRequestCallback[] = []
+    const animationFrameSpy = vi
+      .spyOn(window, 'requestAnimationFrame')
+      .mockImplementation((callback) => {
+        frameCallbacks.push(callback)
+        return frameCallbacks.length
+      })
+    const { container, unmount } = render(<TimelineContent duration={100} tracks={[VIDEO_TRACK]} />)
+    const scrollContainer = container.querySelector('[data-timeline-scroll-container]')
+    if (!(scrollContainer instanceof HTMLDivElement)) {
+      throw new Error('Expected timeline scroll container')
+    }
+
+    // A bare wheel walks the tracks: the timeline neither travels nor zooms.
+    const zoomBefore = useZoomStore.getState().level
+    fireEvent.wheel(scrollContainer, { deltaY: 120 })
+    act(() => frameCallbacks.shift()?.(performance.now()))
+    expect(scrollContainer.scrollLeft).toBe(0)
+    expect(useZoomStore.getState().level).toBe(zoomBefore)
+
+    // Alt is what travels along it, and it travels in one direct step: the
+    // whole distance lands inside the wheel event, with nothing left to coast.
+    fireEvent.wheel(scrollContainer, { deltaY: 120, altKey: true })
+    const steppedTo = 120 * SCROLL_SENSITIVITY * SCROLL_STEP_GAIN
+    expect(scrollContainer.scrollLeft).toBeCloseTo(steppedTo)
+    for (let frame = 0; frame < 10; frame += 1) {
+      act(() => frameCallbacks.shift()?.(performance.now()))
+    }
+    expect(scrollContainer.scrollLeft).toBeCloseTo(steppedTo)
+    expect(useZoomStore.getState().level).toBe(zoomBefore)
 
     unmount()
     animationFrameSpy.mockRestore()

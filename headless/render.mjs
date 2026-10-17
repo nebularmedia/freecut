@@ -9,8 +9,8 @@
 //   node headless/render.mjs --workspace <dir> --list
 //
 // --batch <jobs.json>: an array of job objects, each with the same keys as the
-// CLI flags (project, out, codec, container, resolution, fps, quality, in,
-// out-sec, duration, audio-only). All jobs share one --workspace and reuse a
+// CLI flags (project, out, codec, container, resolution, fps, quality,
+// media-quality, in, out-sec, duration, audio-only). All jobs share one --workspace and reuse a
 // single warm browser.
 //
 // Options:
@@ -20,6 +20,8 @@
 //   --resolution <WxH>     Override output resolution (default: project metadata)
 //   --fps <n>              Override fps (default: project metadata)
 //   --quality <q>          low|medium|high|ultra (default: high)
+//   --media-quality <q>    original|proxy — which copy of a linked source to read
+//                          (default: original). See media/{id}/source.link.json.
 //   --in/--out-sec/--duration <sec>   Render only a slice
 //   --audio-only           Render audio only (container default: mp3)
 //   --strict               Fail (before rendering) on any project validation warning
@@ -46,6 +48,7 @@ const RENDER_OPTIONS = new Set([
   'resolution',
   'fps',
   'quality',
+  'media-quality',
   'in',
   'out-sec',
   'duration',
@@ -60,7 +63,7 @@ const RENDER_OPTIONS = new Set([
   'help',
   'json',
 ])
-const HELP = `Usage:\n  node headless/render.mjs --workspace <dir> --project <id|project.json> [options]\n  node headless/render.mjs --workspace <dir> --batch <jobs.json>\n  node headless/render.mjs --workspace <dir> --list [--json]\n\nOptions: --out --codec --container --resolution --fps --quality --in --out-sec --duration --audio-only --strict --allow-missing-media --head --build --harness-url --json\n`
+const HELP = `Usage:\n  node headless/render.mjs --workspace <dir> --project <id|project.json> [options]\n  node headless/render.mjs --workspace <dir> --batch <jobs.json>\n  node headless/render.mjs --workspace <dir> --list [--json]\n\nOptions: --out --codec --container --resolution --fps --quality --media-quality --in --out-sec --duration --audio-only --strict --allow-missing-media --head --build --harness-url --json\n`
 
 async function main() {
   const args = parseArgs(process.argv.slice(2), { allowed: RENDER_OPTIONS })
@@ -170,7 +173,8 @@ async function main() {
           `\n[${i + 1}/${jobArgsList.length}] ${job.project.name ?? job.project.id} -> ` +
             `${job.settings.mode} ${job.settings.codec}/${job.settings.container} ` +
             `${job.settings.resolution.width}x${job.settings.resolution.height}@${job.settings.fps}${range} ` +
-            `| media ${job.mediaResolved}/${job.mediaTotal}`,
+            `| media ${job.mediaResolved}/${job.mediaTotal}` +
+            (job.proxied.length > 0 ? ` (${job.proxied.length} from proxy)` : ''),
         )
       const summary = await renderJob(page, job, {
         setProgressLabel,

@@ -161,7 +161,8 @@ async function waitForFaceApplied(
   const isApplied = (): boolean =>
     GENERICS.every(
       (generic) =>
-        measure(`${weight} 100px "${family}", ${generic}`) !== measure(`${weight} 100px ${generic}`),
+        measure(`${weight} 100px "${family}", ${generic}`) !==
+        measure(`${weight} 100px ${generic}`),
     )
 
   let streak = 0
@@ -1200,6 +1201,7 @@ interface FreecutHeadlessApi {
   normalizeProject: typeof normalizeProjectForHeadless
   probeMedia: typeof probeMedia
   createProject: typeof createProjectForHeadless
+  stabilizeClip: typeof stabilizeClip
 }
 
 function createProjectForHeadless(input: {
@@ -1278,6 +1280,47 @@ declare global {
   }
 }
 
+/**
+ * Stabilize one span of one media file and hand the render back as a download.
+ *
+ * Deliberately dumb about the timeline: the driver already knows which clip it is stabilizing and
+ * what span that clip plays, and passing the span in keeps this the same operation whether it was
+ * asked for by a sweep, a single clip, or an agent. It renders exactly the seconds it is given —
+ * on a montage, that is a fraction of the raw footage.
+ *
+ * The bytes come back in memory rather than through OPFS because Node collects them via the
+ * browser's download, the same route the render harness already uses. One clip at a time, so the
+ * memory cost is one clip.
+ */
+async function stabilizeClip(input: {
+  url: string
+  fileName: string
+  sourceFps: number
+  cropRatio?: number
+  range?: { startSeconds: number; endSeconds: number }
+}) {
+  const response = await fetch(input.url)
+  if (!response.ok) throw new Error(`Media fetch failed: HTTP ${response.status}`)
+  const source = await response.blob()
+
+  const { runStabilizePipeline } =
+    await import('@/features/media-library/workers/stabilize-pipeline')
+  const { result, buffer } = await runStabilizePipeline({
+    source,
+    sourceFps: input.sourceFps,
+    cropRatio: input.cropRatio,
+    range: input.range,
+    destination: { kind: 'buffer' },
+    onProgress: (stage, progress) => {
+      log.info('Stabilize progress', { stage, progress: Number(progress.toFixed(3)) })
+    },
+  })
+  if (!buffer) throw new Error('Stabilize render produced no bytes')
+
+  triggerDownload(new Blob([buffer], { type: 'video/mp4' }), input.fileName)
+  return result
+}
+
 window.freecut = {
   ready: true,
   renderTimeline,
@@ -1288,5 +1331,6 @@ window.freecut = {
   normalizeProject: normalizeProjectForHeadless,
   probeMedia,
   createProject: createProjectForHeadless,
+  stabilizeClip,
 }
 log.info('Headless harness ready')

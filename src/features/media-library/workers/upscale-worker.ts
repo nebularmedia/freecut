@@ -144,7 +144,7 @@ async function setupRender(
   const target = createRenderCanvas(out.width, out.height)
   const { output, videoSource, codec } = await createMp4Encoder(
     mb,
-    await scratch.createWritable(request.jobId),
+    { kind: 'stream', writable: await scratch.createWritable(request.jobId) },
     { width: out.width, height: out.height, fps: request.sourceFps },
   )
   // Every track must be declared before `start()`.

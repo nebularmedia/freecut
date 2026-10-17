@@ -1,7 +1,7 @@
 import { memo, useEffect, useState, useRef, useMemo, useCallback, type RefCallback } from 'react'
 import { useGifFrames } from '../../hooks/use-gif-frames'
 import { useMediaBlobUrl } from '../../hooks/use-media-blob-url'
-import { resolveMediaUrl } from '@/features/timeline/deps/media-library-resolver'
+import { imagePreviewCache, resolveMediaUrl } from '@/features/timeline/deps/media-library-resolver'
 import { createLogger } from '@/shared/logging/logger'
 import { computeFilmstripRenderWindow } from './render-window'
 
@@ -22,6 +22,9 @@ interface ImageFilmstripProps {
   isVisible: boolean
   /** Source URL for the image (blob URL) */
   src: string
+  /** Intrinsic size of the picture, to decide whether a light copy is worth it */
+  sourceWidth?: number
+  sourceHeight?: number
   /** Source start time in seconds */
   sourceStart: number
   /** Total source duration in seconds */
@@ -103,6 +106,8 @@ export const ImageFilmstrip = memo(function ImageFilmstrip({
   renderWidth,
   isVisible,
   src,
+  sourceWidth = 0,
+  sourceHeight = 0,
   sourceStart,
   trimStart,
   speed,
@@ -162,6 +167,36 @@ export const ImageFilmstrip = memo(function ImageFilmstrip({
   // Resolve the URL to use: prefer freshly resolved blobUrl. Only use the
   // saved item src if it is not a stale blob URL from another origin.
   const resolvedSrc = blobUrl || (canUseItemSrcFallback(src) ? src : '')
+
+  // A CLIP IS NOT PAINTED FROM THE ORIGINAL FILE — 2026-09-03.
+  //
+  // A tile is ~50 px tall, and a camera photo is 8-24 MP. Painting the original
+  // put the whole shoot in the tab uncompressed: 29 photos measured 267 MP,
+  // about 1 GB, and the editor died on a reel that renders fine. The copy is
+  // built once per photo and only when it saves something; while it isn't
+  // there — and for an animated GIF or WebP, whose frames come from the file
+  // itself — this falls back to the original and looks the same.
+  //
+  // The export does not come through here: it resolves media with
+  // `useProxy: false` and encodes the original, untouched.
+  const [previewSrc, setPreviewSrc] = useState<string | null>(() => imagePreviewCache.get(mediaId))
+
+  useEffect(() => {
+    setPreviewSrc(imagePreviewCache.get(mediaId))
+  }, [mediaId])
+
+  useEffect(() => {
+    if (isAnimated || !resolvedSrc || !isVisible) return
+    let mounted = true
+    void imagePreviewCache.resolve(mediaId, resolvedSrc, sourceWidth, sourceHeight).then((url) => {
+      if (mounted && url) setPreviewSrc(url)
+    })
+    return () => {
+      mounted = false
+    }
+  }, [mediaId, resolvedSrc, isAnimated, isVisible, sourceWidth, sourceHeight])
+
+  const paintedSrc = previewSrc ?? resolvedSrc
 
   const effectiveStart = Math.max(0, sourceStart + trimStart)
 
@@ -247,11 +282,19 @@ export const ImageFilmstrip = memo(function ImageFilmstrip({
     visibleEndRatio,
   ])
 
-  // Static image filmstrip: tile the image using CSS background-repeat
+  // Static image filmstrip: tile the image using CSS background-repeat.
+  //
+  // The tile keeps the picture's own shape (`auto 100%` sizes it by height and
+  // lets the width follow), so a vertical photo repeats as vertical thumbnails
+  // instead of being squashed into a 16:9 box. And a clip too narrow to hold a
+  // whole tile shows one thumbnail covering it, rather than the leftmost sliver
+  // of one — a sliver of a photo reads as a flat block of colour.
   if (!isAnimated) {
-    if (height === 0 || !resolvedSrc) {
+    if (height === 0 || !paintedSrc) {
       return <div ref={containerRef} className="absolute inset-0" />
     }
+
+    const showsSingleThumbnail = renderClipWidth <= tileWidth
 
     return (
       <div ref={containerRef} className="absolute inset-0">
@@ -260,10 +303,10 @@ export const ImageFilmstrip = memo(function ImageFilmstrip({
           style={{
             width: renderClipWidth,
             height,
-            backgroundImage: `url(${resolvedSrc})`,
-            backgroundRepeat: 'repeat-x',
-            backgroundSize: `${tileWidth}px ${height}px`,
-            backgroundPosition: 'left center',
+            backgroundImage: `url(${paintedSrc})`,
+            backgroundRepeat: showsSingleThumbnail ? 'no-repeat' : 'repeat-x',
+            backgroundSize: showsSingleThumbnail ? 'cover' : 'auto 100%',
+            backgroundPosition: showsSingleThumbnail ? 'center' : 'left center',
           }}
         />
       </div>

@@ -1,6 +1,7 @@
 import { isGifUrl, isWebpUrl } from '@/shared/utils/media-utils'
 import { createLogger } from '@/shared/logging/logger'
 import type { ImageItem } from '@/types/timeline'
+import { compositionHasAudio } from '../utils/composition-audio'
 import type { RenderProgress } from '../utils/client-renderer'
 import type {
   ExportRenderWorkerRequest,
@@ -60,22 +61,6 @@ function compositionHasAnimatedImage(
         isWebpUrl(imageItem.src) ||
         label.endsWith('.webp')
       ) {
-        return true
-      }
-    }
-  }
-  return false
-}
-
-function compositionHasAudio(
-  tracks: Array<{ items: Array<{ type: string; muted?: boolean }> }>,
-): boolean {
-  for (const track of tracks) {
-    for (const item of track.items ?? []) {
-      if (item.type === 'audio' && item.muted !== true) {
-        return true
-      }
-      if (item.type === 'video' && item.muted !== true) {
         return true
       }
     }

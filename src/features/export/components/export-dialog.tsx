@@ -27,6 +27,7 @@ import {
   X,
   Download,
   Film,
+  FolderCheck,
   Clock,
   HardDrive,
   Music,
@@ -394,8 +395,7 @@ export function ExportDialog({ open, onClose, onOpenRenderQueue }: ExportDialogP
     const reversedClipIds = new Set(
       items
         .filter(
-          (item) =>
-            (item.type === 'video' || item.type === 'audio') && item.isReversed === true,
+          (item) => (item.type === 'video' || item.type === 'audio') && item.isReversed === true,
         )
         .map((item) => item.id),
     )
@@ -580,6 +580,8 @@ export function ExportDialog({ open, onClose, onOpenRenderQueue }: ExportDialogP
     startExport,
     cancelExport,
     downloadVideo,
+    savedPath,
+    saveError,
     resetState,
     getSupportedCodecs,
   } = clientRender
@@ -1574,8 +1576,7 @@ export function ExportDialog({ open, onClose, onOpenRenderQueue }: ExportDialogP
                 </div>
                 <div className="flex items-center justify-between text-sm gap-2">
                   <span className="text-muted-foreground truncate">
-                    {status === 'preparing' &&
-                      (progressMessage ?? t('export.progress.preparing'))}
+                    {status === 'preparing' && (progressMessage ?? t('export.progress.preparing'))}
                     {status === 'rendering' && t('export.progress.rendering')}
                     {status === 'encoding' && t('export.progress.encoding')}
                     {status === 'finalizing' && t('export.progress.finalizing')}
@@ -1654,6 +1655,31 @@ export function ExportDialog({ open, onClose, onOpenRenderQueue }: ExportDialogP
                 </div>
               )}
             </div>
+
+            {/* Dónde ha quedado dentro del proyecto. Se enseña la ruta entera y
+                no un "guardado" a secas: lo que hace falta saber es dónde ir a
+                buscarlo, o dónde va a buscarlo el que suba la pieza. */}
+            {saveError && (
+              <div className="flex items-start gap-2 rounded-md border border-amber-500/40 bg-amber-500/5 px-3 py-2 text-sm">
+                <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" />
+                <div className="min-w-0">
+                  <p className="font-medium">No se pudo guardar dentro del proyecto</p>
+                  <p className="break-all text-xs text-muted-foreground">{saveError}</p>
+                </div>
+              </div>
+            )}
+
+            {savedPath && (
+              <div className="flex items-start gap-2 rounded-md border border-emerald-500/30 bg-emerald-500/5 px-3 py-2 text-sm">
+                <FolderCheck className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
+                <div className="min-w-0">
+                  <span className="text-muted-foreground">
+                    {t('export.complete.savedInProject')}{' '}
+                  </span>
+                  <code className="break-all font-mono text-xs">{savedPath}</code>
+                </div>
+              </div>
+            )}
 
             <div className="flex justify-end gap-2">
               <Button variant="outline" onClick={handleClose}>

@@ -22,7 +22,11 @@ const EDGE_BUDGETS = [
   // Raised for the on-device transcription + caption feature: the timeline
   // transcript editor / auto-captions and the media-library Parakeet/Whisper
   // pipeline now interoperate through more deps/ adapter contracts.
-  { edge: 'timeline -> media-library', maxImports: 16, maxFiles: 7 },
+  // Raised again for per-clip stabilization: the render is a media-library job
+  // (it produces a new library item) but it is started from, reported on and
+  // applied to one timeline clip, so the clip's context menu reaches the
+  // stabilize service and its strength table through a deps/ adapter.
+  { edge: 'timeline -> media-library', maxImports: 18, maxFiles: 8 },
   // Raised for the multi-timeline sequences + compositions feature: the media
   // library's compositions/sequences section reaches the sequences store,
   // composition-navigation store and cycle guard through deps/ adapters.

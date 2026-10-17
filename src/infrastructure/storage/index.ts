@@ -160,6 +160,12 @@ export {
   saveRenderQueue,
 } from '@/infrastructure/storage/workspace-fs/render-queue'
 
+// Projects holding an adopted idea (`_idea/`) — never permanently deleted
+export {
+  assertNoAdoptedIdea,
+  projectHasAdoptedIdea,
+} from '@/infrastructure/storage/workspace-fs/adopted-idea'
+
 // Soft-delete / trash for projects
 export {
   softDeleteProject,

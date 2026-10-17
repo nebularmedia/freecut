@@ -300,6 +300,10 @@
       "importAnyway": "仍然导入",
       "note": "为获得更好的兼容性，请转换为 MP4 (H.264/AAC) 或 WebM。",
       "title": "不支持的编解码器"
+    },
+    "autoProxy": {
+      "queued_one": "正在为 1 个重负载片段生成轻量副本，以保证播放流畅",
+      "queued_other": "正在为 {{count}} 个重负载片段生成轻量副本，以保证播放流畅"
     }
   }
 }

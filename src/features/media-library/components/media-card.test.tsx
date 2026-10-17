@@ -68,6 +68,7 @@ const mediaStoreState = vi.hoisted(() => ({
   proxyProgress: new Map<string, number>(),
   interpolationStatus: new Map<string, 'generating' | 'ready' | 'error'>(),
   upscaleStatus: new Map<string, 'generating' | 'ready' | 'error'>(),
+  stabilizeStatus: new Map<string, 'generating' | 'ready' | 'error'>(),
   currentProjectId: 'test-project' as string | null,
   transcriptStatus: new Map<string, 'idle' | 'queued' | 'transcribing' | 'ready' | 'error'>(),
   transcriptProgress: new Map(),

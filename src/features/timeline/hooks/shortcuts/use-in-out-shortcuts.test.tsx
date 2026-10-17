@@ -4,6 +4,7 @@ import { HOTKEYS } from '@/config/hotkeys'
 import { usePlaybackStore } from '@/shared/state/playback'
 import { useTimelineStore } from '../../stores/timeline-store'
 import { useInOutShortcuts } from './use-in-out-shortcuts'
+import { useSettingsStore } from '@/features/timeline/deps/settings'
 import type { TimelineTrack, VideoItem } from '@/types/timeline'
 
 const { useHotkeysMock } = vi.hoisted(() => ({
@@ -63,6 +64,8 @@ function createHotkeyEvent(): HotkeyEvent {
 describe('useInOutShortcuts', () => {
   beforeEach(() => {
     useHotkeysMock.mockClear()
+    // Asserts the FreeCut bindings by name, so pin the motion mode that owns them.
+    useSettingsStore.setState({ uiMotionMode: 'freecut', hotkeyOverrides: {} })
     useTimelineStore.setState({
       tracks: [TRACK],
       items: [ITEM],

@@ -93,6 +93,7 @@ import {
   startPreviewAudioStartupWarm,
   deletePreviewAudioConform,
 } from '@/features/media-library/deps/composition-runtime'
+import { urlDelMedio } from '@/infrastructure/storage/cut-motor'
 export { FileAccessError } from './file-access'
 
 const IMPORT_BACKGROUND_WARM_DELAY_MS = 600
@@ -1987,8 +1988,21 @@ class MediaLibraryService {
 
   /**
    * Get media file as blob URL (for preview/playback)
+   *
+   * Si la página la sirve el motor de Polimake, se devuelve su URL en lugar de
+   * un blob: el navegador pide tramos con `Range` según reproduce, en vez de
+   * meterse el fichero entero en memoria. Es la diferencia entre que un reel
+   * con 20 GB de brutos tenga que caber en la pestaña y que no.
+   *
+   * `revokeObjectURL` sobre una URL que no es un blob no hace nada, así que
+   * quien llama no tiene que enterarse.
    */
   async getMediaBlobUrl(id: string): Promise<string | null> {
+    const delMotor = await urlDelMedio(id)
+    if (delMotor) {
+      return delMotor
+    }
+
     const file = await this.getMediaFile(id)
 
     if (!file) {

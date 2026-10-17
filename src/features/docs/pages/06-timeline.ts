@@ -62,7 +62,7 @@ const page = {
         {
           kind: 'list',
           items: [
-            'Toggle snapping with `S` so clips snap to nearby cuts, markers, and the playhead.',
+            'Toggle snapping with `N` so clips snap to nearby cuts, markers, and the playhead.',
             'Add a marker with `M` for notes and timing references; jump between markers with `[` and `]`.',
             'Set an in point (`I`) and out point (`O`) to define a range for preview and export; clear them with `Alt+X`.',
           ],

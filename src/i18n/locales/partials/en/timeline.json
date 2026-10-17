@@ -88,7 +88,14 @@
       "unreverse": "Unreverse",
       "updatingCaptions": "Updating Captions",
       "copyGrade": "Copy grade",
-      "pasteGrade": "Paste grade"
+      "pasteGrade": "Paste grade",
+      "stabilizeClip": "Stabilize Clip",
+      "stabilizing": "Stabilizing…",
+      "stabilizeStrength": {
+        "gentle": "Gentle — {{crop}}% crop",
+        "standard": "Standard — {{crop}}% crop",
+        "strong": "Strong — {{crop}}% crop"
+      }
     },
     "fadeHandles": {
       "adjustAudioFadeIn": "Adjust audio fade in",
@@ -319,8 +326,10 @@
       "enableSyncLock": "Enable sync lock",
       "enableTrack": "Enable track",
       "lockTrack": "Lock Track",
+      "muteTrack": "Mute track",
       "soloTrack": "Solo Track",
       "unlockTrack": "Unlock Track",
+      "unmuteTrack": "Unmute track",
       "unsoloTrack": "Unsolo Track"
     },
     "trackRow": {
@@ -337,6 +346,12 @@
       "adjustClipVolume": "Adjust clip volume"
     },
     "emptyTitle": "Drag media here to start editing",
-    "emptyDescription": "Drop clips on tracks, then press Space to preview."
+    "emptyDescription": "Drop clips on tracks, then press Space to preview.",
+    "stabilize": {
+      "analyzing": "Measuring camera motion",
+      "rendering": "Stabilizing",
+      "toastDone": "Clip stabilized",
+      "toastFailed": "Could not apply the stabilized clip"
+    }
   }
 }

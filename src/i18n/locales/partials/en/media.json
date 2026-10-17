@@ -313,6 +313,10 @@
       "importAnyway": "Import Anyway",
       "note": "Note",
       "title": "Unsupported codec"
+    },
+    "autoProxy": {
+      "queued_one": "Generating a lighter copy of 1 heavy clip so playback keeps up",
+      "queued_other": "Generating lighter copies of {{count}} heavy clips so playback keeps up"
     }
   }
 }

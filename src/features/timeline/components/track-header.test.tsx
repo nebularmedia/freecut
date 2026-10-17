@@ -29,7 +29,11 @@ function makeTrack(overrides: Partial<TimelineTrack> = {}): TimelineTrack {
   }
 }
 
-function renderTrackHeader(track: TimelineTrack, onToggleDisabled = vi.fn()) {
+function renderTrackHeader(
+  track: TimelineTrack,
+  onToggleDisabled = vi.fn(),
+  onToggleMute = vi.fn(),
+) {
   const renderResult = render(
     <TrackHeader
       track={track}
@@ -40,6 +44,7 @@ function renderTrackHeader(track: TimelineTrack, onToggleDisabled = vi.fn()) {
       onToggleLock={() => undefined}
       onToggleSyncLock={() => undefined}
       onToggleDisabled={onToggleDisabled}
+      onToggleMute={onToggleMute}
       onToggleSolo={() => undefined}
       onSelect={() => undefined}
       onCloseGaps={() => undefined}
@@ -50,7 +55,7 @@ function renderTrackHeader(track: TimelineTrack, onToggleDisabled = vi.fn()) {
     />,
   )
 
-  return { ...renderResult, onToggleDisabled }
+  return { ...renderResult, onToggleDisabled, onToggleMute }
 }
 
 describe('TrackHeader', () => {
@@ -65,11 +70,33 @@ describe('TrackHeader', () => {
 
     expect(screen.getByRole('button', { name: 'Disable track' })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Hide track' })).not.toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'Mute track' })).not.toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('button', { name: 'Disable track' }))
 
     expect(onToggleDisabled).toHaveBeenCalledTimes(1)
+  })
+
+  /**
+   * Mute is its own button since 2026-09-03, and on a video track it is the
+   * only way to silence anything: disabling one hides the picture and leaves
+   * the camera audio of every clip playing underneath.
+   */
+  it('mutes a whole track from the header without touching a clip', () => {
+    const { onToggleMute, onToggleDisabled } = renderTrackHeader(
+      makeTrack({ kind: 'video', visible: true, muted: false }),
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: 'Mute track' }))
+
+    expect(onToggleMute).toHaveBeenCalledTimes(1)
+    expect(onToggleDisabled).not.toHaveBeenCalled()
+  })
+
+  it('offers to bring the sound back on a muted track', () => {
+    renderTrackHeader(makeTrack({ kind: 'video', muted: true }))
+
+    expect(screen.getByRole('button', { name: 'Unmute track' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Mute track' })).not.toBeInTheDocument()
   })
 
   it('derives the disable state from audio mute status', () => {
@@ -79,7 +106,7 @@ describe('TrackHeader', () => {
 
     expect(screen.getByRole('button', { name: 'Enable track' })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Show track' })).not.toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'Unmute track' })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Unmute track' })).toBeInTheDocument()
     expect(container.querySelector('[data-track-id="track-2"]')).toHaveAttribute(
       'data-track-disabled',
       'true',
@@ -109,6 +136,7 @@ describe('TrackHeader', () => {
         onToggleLock={() => undefined}
         onToggleSyncLock={() => undefined}
         onToggleDisabled={() => undefined}
+        onToggleMute={() => undefined}
         onToggleSolo={() => undefined}
         onSelect={() => undefined}
         onCloseGaps={() => undefined}
@@ -131,6 +159,7 @@ describe('TrackHeader', () => {
         onToggleLock={() => undefined}
         onToggleSyncLock={() => undefined}
         onToggleDisabled={() => undefined}
+        onToggleMute={() => undefined}
         onToggleSolo={() => undefined}
         onSelect={() => undefined}
         onCloseGaps={() => undefined}

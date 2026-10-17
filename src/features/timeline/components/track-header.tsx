@@ -8,7 +8,17 @@ import {
   ContextMenuSeparator,
   ContextMenuTrigger,
 } from '@/components/ui/context-menu'
-import { Power, PowerOff, Lock, GripVertical, Radio, FoldHorizontal, Link2 } from 'lucide-react'
+import {
+  Power,
+  PowerOff,
+  Lock,
+  GripVertical,
+  Radio,
+  FoldHorizontal,
+  Link2,
+  Volume2,
+  VolumeX,
+} from 'lucide-react'
 import type { TimelineTrack } from '@/types/timeline'
 import { useTrackDrag } from '../hooks/use-track-drag'
 import { TIMELINE_SIDEBAR_WIDTH } from '../constants'
@@ -26,6 +36,7 @@ interface TrackHeaderProps {
   onToggleLock: () => void
   onToggleSyncLock: () => void
   onToggleDisabled: () => void
+  onToggleMute: () => void
   onToggleSolo: () => void
   onSelect: (e: React.MouseEvent) => void
   onCloseGaps?: () => void
@@ -67,6 +78,7 @@ export const TrackHeader = memo(function TrackHeader({
   onToggleLock,
   onToggleSyncLock,
   onToggleDisabled,
+  onToggleMute,
   onToggleSolo,
   onSelect,
   onCloseGaps,
@@ -143,6 +155,42 @@ export const TrackHeader = memo(function TrackHeader({
                   <PowerOff className="w-3 h-3 text-primary" />
                 ) : (
                   <Power className="w-3 h-3 opacity-70" />
+                )}
+              </Button>
+
+              {/* Mute Button
+                  Silences the whole track without touching a single clip. It is
+                  NOT what the Power button above does: that one disables the
+                  track, which on a video track only hides the picture and leaves
+                  the camera audio of every clip playing. */}
+              <Button
+                variant="ghost"
+                size="icon"
+                className="rounded hover:bg-secondary"
+                style={{
+                  width: EDITOR_LAYOUT_CSS_VALUES.toolbarButtonSize,
+                  height: EDITOR_LAYOUT_CSS_VALUES.toolbarButtonSize,
+                }}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onToggleMute()
+                }}
+                onMouseDown={(e) => e.stopPropagation()}
+                aria-label={
+                  track.muted
+                    ? t('timeline.trackHeader.unmuteTrack')
+                    : t('timeline.trackHeader.muteTrack')
+                }
+                data-tooltip={
+                  track.muted
+                    ? t('timeline.trackHeader.unmuteTrack')
+                    : t('timeline.trackHeader.muteTrack')
+                }
+              >
+                {track.muted ? (
+                  <VolumeX className="w-3 h-3 text-primary" />
+                ) : (
+                  <Volume2 className="w-3 h-3 opacity-70" />
                 )}
               </Button>
 

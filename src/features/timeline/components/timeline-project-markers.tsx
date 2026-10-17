@@ -151,6 +151,8 @@ const MarkerIndicator = memo(function MarkerIndicator({
         zIndex: isSelected ? 20 : 15,
       }}
       onMouseDown={handleMouseDown}
+      // Owns its own click: a marker is selected, not scrubbed past.
+      data-timeline-marker
       data-tooltip={name}
       data-tooltip-side="bottom"
     >

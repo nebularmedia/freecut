@@ -368,6 +368,33 @@
         "cleared": "Cleared",
         "clear": "Clear"
       },
+      "motion": {
+        "title": "Movement",
+        "subtitle": "Which editor the mouse and the keyboard follow",
+        "modes": {
+          "freecut": {
+            "title": "FreeCut",
+            "description": "The layout this editor grew up with: tool keys under the left hand, the wheel travels along the timeline with an inertial glide, Shift+wheel walks the tracks, Alt+wheel resizes them."
+          },
+          "capcut": {
+            "title": "CapCut",
+            "description": "CapCut muscle memory: Ctrl+B splits, Q/W eat either side of the playhead, A/B swap select and blade, [ and ] select sideways, the wheel walks the tracks and Alt+wheel travels — in direct steps, with no glide."
+          }
+        },
+        "wheel": {
+          "label": "Wheel",
+          "auto": "Mode default",
+          "travel": "Along",
+          "tracks": "Across",
+          "zoom": "Zoom",
+          "hint": "Ctrl+wheel always zooms, and a horizontal swipe always travels."
+        },
+        "firstRun": {
+          "title": "How should the editor move?",
+          "description": "Pick the muscle memory you already have. Every shortcut stays remappable, and you can switch modes any time from the shortcuts panel.",
+          "confirm": "Start editing"
+        }
+      },
       "hotkeys": {
         "title": "Keyboard Shortcuts",
         "subtitle": "— select a command, then record a new combo",
@@ -453,10 +480,16 @@
           "goToEnd": "Go to end",
           "previousSnapPoint": "Previous snap point",
           "nextSnapPoint": "Next snap point",
+          "jumpFrames": "Jump back / forward several frames",
           "splitAtPlayhead": "Split at playhead",
           "joinSelectedClips": "Join selected clips",
           "deleteSelectedItems": "Delete selected items",
           "rippleDeleteSelectedItems": "Ripple delete selected items",
+          "deleteBesidePlayhead": "Delete left / right of playhead",
+          "selectSideOfPlayhead": "Select left / right of playhead",
+          "deselectAll": "Deselect everything",
+          "toggleMainTrackMagnet": "Toggle main track magnet",
+          "nudgeVolume": "Clip volume up / down 0.1 dB",
           "insertFreezeFrame": "Insert freeze frame at playhead",
           "linkSelectedClips": "Link selected clips",
           "unlinkSelectedClips": "Unlink selected clips",

@@ -14,6 +14,9 @@ import {
   serveFile,
   setHttpTimeouts,
 } from './lib/http-security.mjs'
+import { mediaUrlWith, requestedMediaQuality } from './media-server.mjs'
+import { normalizeMediaSource } from './lib/workspace.mjs'
+import { serveUpstreamMedia } from './upstream-media.mjs'
 
 const MIME = {
   '.html': 'text/html; charset=utf-8',
@@ -53,10 +56,11 @@ function contentType(filePath) {
 }
 
 /**
- * @param {{ distDir: string, resolveMedia?: (mediaId: string) => string | null, port?: number }} opts
- *   resolveMedia maps a media id to an absolute source-file path (or null). Omit
- *   to serve no media (e.g. edit-only).
- * @returns {Promise<{ base: string, harnessUrl: string, mediaUrl: (id: string) => string, close: () => Promise<void> }>}
+ * @param {{ distDir: string, resolveMedia?: (mediaId: string, quality?: string) => string | object | null, port?: number }} opts
+ *   resolveMedia maps a media id to an absolute source-file path, or to a source
+ *   descriptor (see resolveMediaSource in lib/workspace.mjs) which may point at
+ *   another host. Omit to serve no media (e.g. edit-only).
+ * @returns {Promise<{ base: string, harnessUrl: string, mediaUrl: (id: string, quality?: string) => string, close: () => Promise<void> }>}
  */
 export async function createHarnessServer({ distDir, resolveMedia = () => null, port = 0 }) {
   const resolvedDist = path.resolve(distDir)
@@ -80,14 +84,20 @@ export async function createHarnessServer({ distDir, resolveMedia = () => null, 
       const mediaMatch = pathname.match(/^\/media\/(.+)$/)
       if (mediaMatch) {
         const mediaId = assertSinglePathComponent(mediaMatch[1], 'media id')
-        const filePath = resolveMedia(mediaId)
-        if (!filePath) {
+        const source = normalizeMediaSource(resolveMedia(mediaId, requestedMediaQuality(req)))
+        if (!source) {
           res.writeHead(404)
           res.end('media not found')
           return
         }
-        await serveFile(req, res, filePath, {
-          contentType: contentType(filePath),
+        if (source.kind === 'link') {
+          // Same origin as the harness, so the page's cross-origin isolation
+          // never enters into it — see upstream-media.mjs.
+          await serveUpstreamMedia(req, res, source)
+          return
+        }
+        await serveFile(req, res, source.path, {
+          contentType: contentType(source.path),
           allowRange: true,
         })
         return
@@ -110,7 +120,7 @@ export async function createHarnessServer({ distDir, resolveMedia = () => null, 
   return {
     base,
     harnessUrl: `${base}/headless.html`,
-    mediaUrl: (mediaId) => `${base}/media/${encodeURIComponent(mediaId)}`,
+    mediaUrl: (mediaId, quality) => mediaUrlWith(base, mediaId, quality),
     close: () => new Promise((resolve) => server.close(() => resolve())),
   }
 }

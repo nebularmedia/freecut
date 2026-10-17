@@ -1,16 +1,8 @@
-import {
-  Suspense,
-  lazy,
-  memo,
-  useCallback,
-  useDeferredValue,
-  useMemo,
-  type ReactNode,
-} from 'react'
+import { Suspense, lazy, memo, useCallback, useDeferredValue, useMemo, type ReactNode } from 'react'
 import { Link2 } from 'lucide-react'
 import { perfMarkRender } from '@/shared/logging/perf-marks'
 import type { TimelineItem } from '@/types/timeline'
-import { useSettingsStore } from '@/features/timeline/deps/settings'
+import { useSettingsStore, useUiMotionProfile } from '@/features/timeline/deps/settings'
 import { useMediaLibraryStore } from '@/features/timeline/deps/media-library-store'
 import { useCompositionsStore } from '../../stores/compositions-store'
 import { useSequencesStore } from '../../stores/sequences-store'
@@ -32,7 +24,6 @@ import { useTimelineContentPixelsPerSecond } from '../../contexts/timeline-zoom-
 
 const EMPTY_COMPOSITION_LOOKUP: Record<string, never> = {}
 const WAVEFORM_MIN_WIDTH_PX = 12
-const FILMSTRIP_MIN_WIDTH_PX = 20
 const MEDIA_LABEL_MIN_WIDTH_PX = 28
 const MEDIA_LINK_ICON_MIN_WIDTH_PX = 48
 const MEDIA_LINKED_LABEL_MIN_WIDTH_PX = 56
@@ -95,6 +86,7 @@ function CompositionFilmstripSegment({
   isReversed = false,
 }: CompositionFilmstripSegmentProps) {
   const mediaId = segment.mediaId
+  const filmstripMinWidthPx = useFilmstripMinWidthPx()
   const mediaFps = useMediaLibraryStore(
     useCallback(
       (s) => s.mediaById[mediaId]?.fps || segment.sourceFps,
@@ -132,7 +124,7 @@ function CompositionFilmstripSegment({
     : 0
   const segmentIsVisible = wrapperIsVisible && hasOverlap
 
-  if (segmentClipWidth < FILMSTRIP_MIN_WIDTH_PX) return null
+  if (segmentClipWidth < filmstripMinWidthPx) return null
 
   return (
     <div
@@ -283,6 +275,13 @@ type MediaTimelineItem = Extract<TimelineItem, { type: 'video' | 'audio' | 'imag
   mediaId: string
 }
 
+/**
+ * The narrowest clip that still draws its thumbnails, per motion mode.
+ */
+function useFilmstripMinWidthPx(): number {
+  return useUiMotionProfile().filmstripMinWidthPx
+}
+
 interface MediaClipGeometry {
   clipWidth: number
   renderWidth: number
@@ -385,7 +384,7 @@ const VideoClipVisualContent = memo(function VideoClipVisualContent({
     clipWidthFrames,
     fps,
     preferImmediateRendering,
-    minVisualWidthPx: FILMSTRIP_MIN_WIDTH_PX,
+    minVisualWidthPx: useFilmstripMinWidthPx(),
   })
   const source = useMediaSourceTiming(item, fps)
 
@@ -486,10 +485,11 @@ const ImageClipVisualContent = memo(function ImageClipVisualContent({
     clipWidthFrames,
     fps,
     preferImmediateRendering,
-    minVisualWidthPx: FILMSTRIP_MIN_WIDTH_PX,
+    minVisualWidthPx: useFilmstripMinWidthPx(),
   })
   const source = useMediaSourceTiming(item, fps)
-  const mediaMimeType = useMediaLibraryStore.getState().mediaById[item.mediaId]?.mimeType
+  const media = useMediaLibraryStore.getState().mediaById[item.mediaId]
+  const mediaMimeType = media?.mimeType
   const isAnimatedGif = mediaMimeType === 'image/gif' || isGifUrl(item.src)
   const isAnimatedWebp = mediaMimeType === 'image/webp' || isWebpUrl(item.src)
 
@@ -508,6 +508,8 @@ const ImageClipVisualContent = memo(function ImageClipVisualContent({
           renderWidth={geometry.renderWidth}
           isVisible={geometry.clipVisibility.isVisible}
           src={item.src}
+          sourceWidth={media?.width ?? item.sourceWidth ?? 0}
+          sourceHeight={media?.height ?? item.sourceHeight ?? 0}
           sourceStart={source.sourceStart}
           sourceDuration={source.sourceDuration}
           trimStart={source.trimStart}
@@ -594,6 +596,7 @@ const DetailedCompositionClipContent = memo(function DetailedCompositionClipCont
   const showVideoFilmstrips = useSettingsStore(
     (s) => s.showFilmstrips && s.enableFilmstripExtraction,
   )
+  const filmstripMinWidthPx = useFilmstripMinWidthPx()
 
   const clipLeftPx = useMemo(
     () => (fps > 0 ? (clipLeftFrames / fps) * pixelsPerSecond : 0),
@@ -721,8 +724,9 @@ const DetailedCompositionClipContent = memo(function DetailedCompositionClipCont
   )
 
   // Resolve-style visual LOD: a thumbnail needs more real pixel width to remain
-  // legible, while a waveform is still useful in a much narrower clip.
-  const showFilmstripContent = clipWidth >= FILMSTRIP_MIN_WIDTH_PX
+  // legible, while a waveform is still useful in a much narrower clip. How much
+  // more comes from the motion mode.
+  const showFilmstripContent = clipWidth >= filmstripMinWidthPx
   const showWaveformContent = clipWidth >= WAVEFORM_MIN_WIDTH_PX
   const showFilmstripRow = showFilmstripContent && showVideoFilmstrips
   const showWaveformRow = showWaveformContent && showCompositionWaveform && !!composition
@@ -855,11 +859,16 @@ function hasBasicMediaVisuals(item: TimelineItem): boolean {
   if (item.type === 'audio') {
     return !!item.mediaId && !item.compositionId
   }
-  return item.type === 'image' && !!item.src && !!item.mediaId
+  // An image needs its media id and nothing else: ImageFilmstrip resolves the
+  // picture from the library and only falls back to `src` when that URL is
+  // same-origin. Demanding `src` here left every clip in a project authored
+  // outside the drag-and-drop path — where items carry a media id and an empty
+  // `src` — with no thumbnail at all, just its label on a flat block.
+  return item.type === 'image' && !!item.mediaId
 }
 
-function getMediaVisualMinWidthPx(item: TimelineItem): number {
-  return item.type === 'audio' ? WAVEFORM_MIN_WIDTH_PX : FILMSTRIP_MIN_WIDTH_PX
+function getMediaVisualMinWidthPx(item: TimelineItem, filmstripMinWidthPx: number): number {
+  return item.type === 'audio' ? WAVEFORM_MIN_WIDTH_PX : filmstripMinWidthPx
 }
 
 function getSyncOffsetBadgeMinWidthPx(linkedSyncOffsetLabel: string): number {
@@ -880,7 +889,7 @@ const WidthGatedMediaClipContent = memo(function WidthGatedMediaClipContent(
     linkedSyncOffsetFrames = null,
     isDetailEligible = true,
   } = props
-  const minVisualWidthPx = getMediaVisualMinWidthPx(item)
+  const minVisualWidthPx = getMediaVisualMinWidthPx(item, useFilmstripMinWidthPx())
   const linkedSyncOffsetLabel =
     linkedSyncOffsetFrames === null ? null : formatSignedFrameDelta(linkedSyncOffsetFrames, fps)
   const syncOffsetBadgeMinWidthPx =

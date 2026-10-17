@@ -88,7 +88,14 @@
       "unreverse": "反転を解除",
       "updatingCaptions": "キャプションを更新中",
       "copyGrade": "グレーディングをコピー",
-      "pasteGrade": "グレーディングをペースト"
+      "pasteGrade": "グレーディングをペースト",
+      "stabilizeClip": "クリップを手ブレ補正",
+      "stabilizing": "手ブレ補正中…",
+      "stabilizeStrength": {
+        "gentle": "弱 — トリミング {{crop}}%",
+        "standard": "標準 — トリミング {{crop}}%",
+        "strong": "強 — トリミング {{crop}}%"
+      }
     },
     "fadeHandles": {
       "adjustAudioFadeIn": "オーディオのフェードインを調整",
@@ -319,8 +326,10 @@
       "enableSyncLock": "同期ロックを有効化",
       "enableTrack": "トラックを有効化",
       "lockTrack": "トラックをロック",
+      "muteTrack": "トラックをミュート",
       "soloTrack": "トラックをソロ",
       "unlockTrack": "トラックのロックを解除",
+      "unmuteTrack": "トラックのミュートを解除",
       "unsoloTrack": "ソロを解除"
     },
     "trackRow": {
@@ -337,6 +346,12 @@
       "adjustClipVolume": "クリップ音量を調整"
     },
     "emptyTitle": "編集を始めるにはメディアをここにドラッグ",
-    "emptyDescription": "クリップをトラックにドロップし、Space キーでプレビューします。"
+    "emptyDescription": "クリップをトラックにドロップし、Space キーでプレビューします。",
+    "stabilize": {
+      "analyzing": "カメラの動きを計測中",
+      "rendering": "手ブレ補正中",
+      "toastDone": "クリップを補正しました",
+      "toastFailed": "補正したクリップを適用できませんでした"
+    }
   }
 }

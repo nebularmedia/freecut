@@ -26,6 +26,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/shared/ui/cn'
+import { UiMotionModePicker } from './ui-motion-mode-picker'
 import {
   HOTKEYS,
   createHotkeyExportDocument,
@@ -1016,6 +1017,7 @@ export function HotkeyEditor() {
             {t('projects.settings.hotkeys.subtitle')}
           </span>
         </div>
+        <UiMotionModePicker variant="strip" className="shrink-0" />
         <span className="shrink-0 rounded-full border border-primary/20 bg-primary/10 px-2.5 py-0.5 text-[11px] font-medium uppercase tracking-[0.18em] text-primary">
           {t('projects.settings.hotkeys.customCount', { count: customCount })}
         </span>

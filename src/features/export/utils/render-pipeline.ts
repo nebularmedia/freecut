@@ -35,6 +35,7 @@ import {
   selectFallbackVideoCodec,
 } from './client-renderer'
 import { renderAudioOnly, renderComposition } from './canvas-render-orchestrator'
+import { compositionHasAudio } from './composition-audio'
 import type {
   ExportRenderWorkerRequest,
   ExportRenderWorkerResponse,
@@ -267,6 +268,31 @@ export async function runRender({
       worker.onerror = null
     },
   })
+
+  /*
+   * Con audio, el worker no sirve — y no hace falta arrancarlo para saberlo.
+   *
+   * Mezclar audio necesita un `OfflineAudioContext`, que ningún navegador
+   * expone hoy dentro de un worker. El worker ya se negaba, pero se negaba
+   * DESPUÉS de levantarse: cada exportación con música arrancaba un worker, lo
+   * montaba entero, se caía con `WORKER_REQUIRES_MAIN_THREAD:audio-context` y
+   * dejaba un "Export worker failed" en rojo en la consola. Una comprobación
+   * que ya sabíamos hacer, hecha al principio.
+   *
+   * Si algún día un navegador lo expone, esto es lo único que hay que quitar.
+   */
+  const conAudio = compositionHasAudio(composition.tracks ?? [])
+  if (conAudio) {
+    workerManager.terminate()
+    const result = await renderOnMainThread(
+      exportMode,
+      clientSettings,
+      composition,
+      signal,
+      onProgress,
+    )
+    return { result, renderPath: 'main-thread', fallbackReason: 'audio-context' }
+  }
 
   try {
     const result = await renderInWorker(

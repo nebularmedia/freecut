@@ -630,7 +630,12 @@ function resolveCompositionWrapper(
     wrapperSourceEnd:
       compositionItem.sourceEnd ??
       sourceOffset +
-        timelineToSourceFrames(compositionItem.durationInFrames, wrapperSpeed, fps, wrapperSourceFps),
+        timelineToSourceFrames(
+          compositionItem.durationInFrames,
+          wrapperSpeed,
+          fps,
+          wrapperSourceFps,
+        ),
   }
 }
 
@@ -665,9 +670,11 @@ function mapNestedItemWindow(
   if (overlapEnd <= overlapStart) return null
 
   const effectiveStart =
-    compFrom + sourceToTimelineFrames(overlapStart - sourceOffset, wrapperSpeed, wrapperSourceFps, fps)
+    compFrom +
+    sourceToTimelineFrames(overlapStart - sourceOffset, wrapperSpeed, wrapperSourceFps, fps)
   const effectiveEnd =
-    compFrom + sourceToTimelineFrames(overlapEnd - sourceOffset, wrapperSpeed, wrapperSourceFps, fps)
+    compFrom +
+    sourceToTimelineFrames(overlapEnd - sourceOffset, wrapperSpeed, wrapperSourceFps, fps)
   const effectiveDuration = Math.max(1, effectiveEnd - effectiveStart)
 
   const baseSourceStart = subItem.sourceStart ?? subItem.trimStart ?? 0
@@ -1273,9 +1280,23 @@ async function recoverAudioDecode(params: {
     }
   }
   if (!params.allowWebAudioFallback) throw params.error
-  log.warn(
-    `Mediabunny audio decode failed for ${params.itemId}, using fallback: ${getErrorMessage(params.error)}`,
-  )
+
+  /*
+   * Un vídeo SIN pista de audio no es un fallo: es un vídeo mudo.
+   *
+   * Y son la norma en esta casa — los planos se preparan con `-an` porque la
+   * música va aparte. Antes cada clip mudo dejaba tres líneas por segmento: dos
+   * warnings de mediabunny y un error rojo del mezclador, y con nueve planos eso
+   * son veintisiete líneas que tapan lo que sí importa. La mezcla ya seguía
+   * adelante; lo único que sobraba era el susto.
+   */
+  const motivo = getErrorMessage(params.error)
+  if (/no audio track/i.test(motivo)) {
+    log.debug(`No audio track in ${params.itemId} — treated as silence`)
+    throw params.error
+  }
+
+  log.warn(`Mediabunny audio decode failed for ${params.itemId}, using fallback: ${motivo}`)
   return decodeAudioFallback(params.src, params.itemId, params.startTime, params.endTime)
 }
 
@@ -2886,7 +2907,13 @@ export async function processAudio(
         outputSamples: processedChannels[0]?.length,
       })
     } catch (error) {
-      log.error(`Failed to process audio segment ${segment.itemId}: ${getErrorMessage(error)}`)
+      // Lo mismo: un plano mudo no es una avería que haya que enseñar en rojo.
+      const motivo = getErrorMessage(error)
+      if (/no audio track/i.test(motivo)) {
+        log.debug(`Silent segment ${segment.itemId} — nothing to mix`)
+      } else {
+        log.error(`Failed to process audio segment ${segment.itemId}: ${motivo}`)
+      }
       // Continue with other segments
     }
   }

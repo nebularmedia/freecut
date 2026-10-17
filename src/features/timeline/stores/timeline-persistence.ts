@@ -38,10 +38,7 @@ import { useMarkersStore } from './markers-store'
 import { useTimelineSettingsStore } from './timeline-settings-store'
 import { ROOT_HISTORY_CONTEXT, useTimelineCommandStore } from './timeline-command-store'
 import { useCompositionsStore, type SubComposition } from './compositions-store'
-import {
-  getActiveTabId,
-  useCompositionNavigationStore,
-} from './composition-navigation-store'
+import { getActiveTabId, useCompositionNavigationStore } from './composition-navigation-store'
 import { useSequencesStore } from './sequences-store'
 import { getProject, updateProject, saveProjectThumbnail } from '@/infrastructure/storage'
 import {
@@ -51,6 +48,7 @@ import {
 import { resolveMediaUrls } from '@/features/timeline/deps/media-library-resolver'
 import { importMediaLibraryService } from '@/features/timeline/deps/media-library-service'
 import { validateProjectMediaReferences } from '@/features/timeline/utils/media-validation'
+import { resolveCoverFrame } from '@/features/timeline/utils/cover-frame'
 import { useMediaLibraryStore } from '@/features/timeline/deps/media-library-store'
 import { useSettingsStore } from '@/features/timeline/deps/settings-contract'
 import { migrateProject, CURRENT_SCHEMA_VERSION } from '@/shared/projects/migrations'
@@ -785,8 +783,7 @@ function captureTimelinePersistenceSnapshot(): TimelinePersistenceSnapshot {
     compositions,
     currentFrame: heldRoot ? heldRoot.currentFrame : playback.currentFrame,
     zoomLevel: heldRoot?.zoomLevel ?? rootView?.zoomLevel ?? zoom.level,
-    scrollPosition:
-      heldRoot?.scrollPosition ?? rootView?.scrollPosition ?? settings.scrollPosition,
+    scrollPosition: heldRoot?.scrollPosition ?? rootView?.scrollPosition ?? settings.scrollPosition,
     busAudioEq: heldRoot ? heldRoot.busAudioEq : playback.busAudioEq,
     masterBusDb: playback.masterBusDb,
     markers: heldRoot ? heldRoot.markers : markers.markers,
@@ -955,13 +952,20 @@ export async function saveTimeline(projectId: string): Promise<void> {
       height: project.metadata?.height,
     })
 
-    // Generate thumbnail — prefer capturing the existing preview canvas
-    // (near-free: reuses the already-initialized scrub renderer with cached
-    // media + GPU pipeline) and fall back to a full renderSingleFrame only
-    // when the preview capture path is unavailable.
+    // Generate thumbnail — the cover is DERIVED FROM THE TIMELINE (the opening
+    // picture, a beat in), never from where the playhead happens to be parked.
+    // Capturing the preview canvas is near-free, so it is still used, but only
+    // when the playhead already sits on that frame; otherwise the cover frame
+    // is rendered on purpose.
     let thumbnailId: string | undefined
     if (itemsState.items.length > 0) {
       try {
+        const coverFrame = resolveCoverFrame(
+          itemsState.items,
+          itemsState.tracks,
+          project.metadata?.fps || 30,
+        )
+        event.merge({ coverFrame })
         const width = project.metadata?.width || DEFAULT_PROJECT_WIDTH
         const height = project.metadata?.height || DEFAULT_PROJECT_HEIGHT
 
@@ -987,7 +991,11 @@ export async function saveTimeline(projectId: string): Promise<void> {
         // render Main from its held snapshot instead of saving the Motion canvas
         // as the project cover.
         const captureCanvasSource = usePreviewBridgeStore.getState().captureCanvasSource
-        if (captureCanvasSource && persistenceSnapshot.isRootTimelineLive) {
+        if (
+          captureCanvasSource &&
+          persistenceSnapshot.isRootTimelineLive &&
+          currentFrame === coverFrame
+        ) {
           try {
             const sourceCanvas = await captureCanvasSource()
             if (sourceCanvas) {
@@ -998,7 +1006,8 @@ export async function saveTimeline(projectId: string): Promise<void> {
           }
         }
 
-        // Slow path: full render from scratch (when preview isn't available)
+        // Render the cover frame on purpose (preview unavailable, or parked
+        // somewhere else in the timeline — which is the normal case).
         if (!thumbnailBlob) {
           const fps = project.metadata?.fps || 30
           const backgroundColor = project.metadata?.backgroundColor
@@ -1019,7 +1028,7 @@ export async function saveTimeline(projectId: string): Promise<void> {
           const { renderSingleFrame } = await importCanvasRenderOrchestrator()
           thumbnailBlob = await renderSingleFrame({
             composition: resolvedComposition,
-            frame: currentFrame,
+            frame: coverFrame,
             width: thumbWidth,
             height: thumbHeight,
             quality: 0.85,
@@ -1230,10 +1239,7 @@ function getTimelineLoadKey(projectId: string, options: LoadTimelineOptions): st
   return JSON.stringify([projectId, options.allowProjectUpgrade === true])
 }
 
-export function loadTimeline(
-  projectId: string,
-  options: LoadTimelineOptions = {},
-): Promise<void> {
+export function loadTimeline(projectId: string, options: LoadTimelineOptions = {}): Promise<void> {
   const loadKey = getTimelineLoadKey(projectId, options)
   const inFlightLoad = inFlightTimelineLoads.get(loadKey)
   if (inFlightLoad) return inFlightLoad

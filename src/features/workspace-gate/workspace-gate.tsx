@@ -92,6 +92,24 @@ export function WorkspaceGate({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     let cancelled = false
     ;(async () => {
+      // Si la pagina la sirve el motor de Polimake con una obra abierta, esa
+      // es la carpeta: no hay nada que elegir ni permiso que pedir, y el
+      // navegador deja de tocar el disco. Va antes que todo lo demas, incluida
+      // la comprobacion de la API de ficheros, porque con el motor esa API ni
+      // se usa.
+      try {
+        const { estadoDelMotor } = await import('@/infrastructure/storage/cut-motor')
+        const { raizDelMotor } = await import('@/infrastructure/storage/cut-directorio')
+        const motor = await estadoDelMotor()
+        if (motor?.workspace) {
+          if (cancelled) return
+          await activate(raizDelMotor(motor.workspace))
+          return
+        }
+      } catch (error) {
+        logger.warn('No se ha podido usar el workspace del motor', error)
+      }
+
       if (!isFileSystemAccessSupported()) {
         if (!cancelled) setStatus({ kind: 'unavailable' })
         return

@@ -14,7 +14,11 @@ import { createLogger, createOperationId } from '@/shared/logging/logger'
 import { proxyService } from '../services/proxy-service'
 import { frameInterpolationService } from '../services/frame-interpolation-service'
 import { upscaleService } from '../services/upscale-service'
+import { stabilizeService } from '../services/stabilize-service'
 import { getSharedProxyKey } from '../utils/proxy-key'
+import { queueProxiesForHeavyMedia } from '../utils/auto-proxy'
+import { useSettingsStore } from '../deps/settings-contract'
+import { i18n } from '@/i18n'
 import { createImportActions } from './media-import-actions'
 import { createDeleteActions } from './media-delete-actions'
 import { createRelinkingActions } from './media-relinking-actions'
@@ -152,6 +156,12 @@ const newStore: MediaLibraryStoreApi =
         upscaleStage: new Map(),
         upscaleEtaSeconds: new Map(),
 
+        // Stabilisation
+        stabilizeStatus: new Map(),
+        stabilizeProgress: new Map(),
+        stabilizeStage: new Map(),
+        stabilizeEtaSeconds: new Map(),
+
         // Transcript generation
         transcriptStatus: new Map(),
         transcriptProgress: new Map(),
@@ -166,6 +176,7 @@ const newStore: MediaLibraryStoreApi =
           if (previousProjectId !== projectId) {
             frameInterpolationService.cancelAll()
             upscaleService.cancelAll()
+            stabilizeService.cancelAll()
           }
           const previousMediaIds = get().mediaItems.map((item) => item.id)
           for (const mediaId of previousMediaIds) {
@@ -190,6 +201,10 @@ const newStore: MediaLibraryStoreApi =
             upscaleProgress: new Map(),
             upscaleStage: new Map(),
             upscaleEtaSeconds: new Map(),
+            stabilizeStatus: new Map(),
+            stabilizeProgress: new Map(),
+            stabilizeStage: new Map(),
+            stabilizeEtaSeconds: new Map(),
             transcriptStatus: new Map(),
             transcriptProgress: new Map(),
             taggingMediaIds: new Set(),
@@ -533,6 +548,49 @@ const newStore: MediaLibraryStoreApi =
           })
         },
 
+        // Stabilisation
+        setStabilizeStatus: (mediaId: string, status: 'generating' | 'ready' | 'error') => {
+          set((state) => {
+            const stabilizeStatus = new Map(state.stabilizeStatus)
+            stabilizeStatus.set(mediaId, status)
+            return { stabilizeStatus }
+          })
+        },
+
+        clearStabilizeStatus: (mediaId: string) => {
+          set((state) => {
+            const stabilizeStatus = new Map(state.stabilizeStatus)
+            stabilizeStatus.delete(mediaId)
+            const stabilizeProgress = new Map(state.stabilizeProgress)
+            stabilizeProgress.delete(mediaId)
+            const stabilizeStage = new Map(state.stabilizeStage)
+            stabilizeStage.delete(mediaId)
+            const stabilizeEtaSeconds = new Map(state.stabilizeEtaSeconds)
+            stabilizeEtaSeconds.delete(mediaId)
+            return { stabilizeStatus, stabilizeProgress, stabilizeStage, stabilizeEtaSeconds }
+          })
+        },
+
+        setStabilizeProgress: (mediaId: string, progress: number, stage, etaSeconds) => {
+          set((state) => {
+            const stabilizeProgress = new Map(state.stabilizeProgress)
+            stabilizeProgress.set(mediaId, progress)
+            const stabilizeStage = new Map(state.stabilizeStage)
+            stabilizeStage.set(mediaId, stage)
+
+            const stabilizeEtaSeconds = new Map(state.stabilizeEtaSeconds)
+            // A null ETA means "still warming up"; keep the last good value rather than
+            // flickering the label away. The ETA restarts when the render pass takes over from
+            // the analysis pass, which is honest — they are separately paced.
+            if (typeof etaSeconds === 'number') {
+              stabilizeEtaSeconds.set(mediaId, etaSeconds)
+            } else if (stage === 'rendering' && state.stabilizeStage.get(mediaId) === 'analyzing') {
+              stabilizeEtaSeconds.delete(mediaId)
+            }
+            return { stabilizeProgress, stabilizeStage, stabilizeEtaSeconds }
+          })
+        },
+
         setTranscriptStatus: (mediaId, status) => {
           set((state) => {
             const transcriptStatus = new Map(state.transcriptStatus)
@@ -664,6 +722,38 @@ if (!hotStore) {
     useMediaLibraryStore.setState({ mediaById: buildMediaById(state.mediaItems) })
   })
 
+  // Heavy media gets a proxy on its own, without anyone pressing anything.
+  //
+  // It hangs off the same `mediaItems` change that rebuilds `mediaById`, so it
+  // covers both ways media arrives: opening a project (`loadMediaItems`) and
+  // importing (`prependMediaItem`). `queueProxiesForHeavyMedia` skips whatever
+  // already has a proxy, so seeing the same list twice costs a loop and
+  // nothing else — which is what makes it safe to hang off a change event
+  // rather than off each of the two call sites.
+  let autoProxySeen = new Set<string>()
+  useMediaLibraryStore.subscribe((state) => {
+    if (!useSettingsStore.getState().autoProxyHeavyMedia) return
+    const fresh = state.mediaItems.filter((m) => !autoProxySeen.has(m.id))
+    if (fresh.length === 0) return
+    // Mark before queuing: `generateProxy` fires status changes synchronously,
+    // which re-enters this subscription, and without this the same clip would
+    // be considered twice on the way in.
+    autoProxySeen = new Set([...autoProxySeen, ...fresh.map((m) => m.id)])
+
+    const { queued } = queueProxiesForHeavyMedia(fresh, async (mediaId) => {
+      const { mediaLibraryService } = await loadMediaLibraryService()
+      return mediaLibraryService.getMediaFile(mediaId)
+    })
+    // Say it out loud. A machine that starts transcoding on its own without
+    // telling anyone is indistinguishable from a machine that is stuck.
+    if (queued > 0) {
+      useMediaLibraryStore.getState().showNotification({
+        type: 'info',
+        message: i18n.t('media.autoProxy.queued', { count: queued }),
+      })
+    }
+  })
+
   // Wire up proxy service status listener to update store state
   proxyService.onStatusChange((mediaId, status, progress) => {
     const store = useMediaLibraryStore.getState()
@@ -709,6 +799,23 @@ if (!hotStore) {
   })
 
   upscaleService.onMediaCreated((media, projectId) => {
+    const store = useMediaLibraryStore.getState()
+    if (store.currentProjectId === projectId) store.prependMediaItem(media)
+  })
+
+  stabilizeService.onStatusChange((mediaId, status, progress, stage, etaSeconds) => {
+    const store = useMediaLibraryStore.getState()
+    if (status === 'idle' || status === 'ready') {
+      store.clearStabilizeStatus(mediaId)
+      return
+    }
+    store.setStabilizeStatus(mediaId, status)
+    if (progress !== undefined && stage) {
+      store.setStabilizeProgress(mediaId, progress, stage, etaSeconds)
+    }
+  })
+
+  stabilizeService.onMediaCreated((media, projectId) => {
     const store = useMediaLibraryStore.getState()
     if (store.currentProjectId === projectId) store.prependMediaItem(media)
   })

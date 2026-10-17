@@ -131,7 +131,9 @@
       "localAiDescription": "상주 런타임을 언로드하거나 캐시된 모델 다운로드를 지웁니다.",
       "clearCacheConfirmTitle": "프로젝트 캐시를 지우시겠습니까?",
       "clearCacheConfirmDescription": "현재 프로젝트({{count}}개 미디어 항목)의 캐시된 파형, 동영상 썸네일, GIF 프레임, 디코딩된 오디오를 삭제합니다. 필요할 때 자동으로 다시 생성됩니다. 프로젝트 데이터, 미디어 파일, 썸네일, 프록시는 영향을 받지 않습니다.",
-      "clearCache": "캐시 지우기"
+      "clearCache": "캐시 지우기",
+      "autoProxyHeavyMedia": "무거운 미디어 자동 프록시",
+      "autoProxyHeavyMediaDescription": "4K, 높은 프레임 레이트, GPU가 디코딩할 수 없는 코덱에 대해 경량 사본을 자동 생성합니다"
     },
     "toasts": {
       "projectCacheCleared": "프로젝트 캐시를 지웠습니다",

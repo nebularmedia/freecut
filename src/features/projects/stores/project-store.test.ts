@@ -14,6 +14,7 @@ const storageMocks = vi.hoisted(() => ({
   softDeleteProject: vi.fn(),
   restoreProject: vi.fn(),
   getTrashedProjectMediaIds: vi.fn(),
+  assertNoAdoptedIdea: vi.fn(),
 }))
 
 vi.mock('@/infrastructure/storage', () => storageMocks)

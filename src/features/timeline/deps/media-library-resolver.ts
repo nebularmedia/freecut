@@ -3,6 +3,7 @@ export {
   resolveMediaUrls,
   resolveProxyUrl,
 } from './media-library-resolver-contract'
+export { imagePreviewCache } from './media-library-resolver-contract'
 export {
   clearMediaDragData,
   type CompositionDragData,

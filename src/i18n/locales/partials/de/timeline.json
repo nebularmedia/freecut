@@ -88,7 +88,14 @@
       "unreverse": "Umkehrung aufheben",
       "updatingCaptions": "Aktualisieren Untertitel",
       "copyGrade": "Farbkorrektur kopieren",
-      "pasteGrade": "Farbkorrektur einfügen"
+      "pasteGrade": "Farbkorrektur einfügen",
+      "stabilizeClip": "Clip stabilisieren",
+      "stabilizing": "Wird stabilisiert…",
+      "stabilizeStrength": {
+        "gentle": "Sanft — {{crop}} % Beschnitt",
+        "standard": "Standard — {{crop}} % Beschnitt",
+        "strong": "Stark — {{crop}} % Beschnitt"
+      }
     },
     "fadeHandles": {
       "adjustAudioFadeIn": "Anpassen Audio Fade ein",
@@ -319,8 +326,10 @@
       "enableSyncLock": "Aktivieren Sync Sperre",
       "enableTrack": "Aktivieren Spur",
       "lockTrack": "Sperre Spur",
+      "muteTrack": "Spur stummschalten",
       "soloTrack": "Solo Spur",
       "unlockTrack": "entsperren Spur",
+      "unmuteTrack": "Stummschaltung der Spur aufheben",
       "unsoloTrack": "Solo aus Spur"
     },
     "trackRow": {
@@ -337,6 +346,12 @@
       "adjustClipVolume": "Anpassen Clip Lautstarke"
     },
     "emptyTitle": "Ziehe Medien hierher, um mit dem Schnitt zu beginnen",
-    "emptyDescription": "Lege Clips auf Spuren ab und drücke dann die Leertaste für die Vorschau."
+    "emptyDescription": "Lege Clips auf Spuren ab und drücke dann die Leertaste für die Vorschau.",
+    "stabilize": {
+      "analyzing": "Kamerabewegung wird gemessen",
+      "rendering": "Wird stabilisiert",
+      "toastDone": "Clip stabilisiert",
+      "toastFailed": "Stabilisierter Clip konnte nicht angewendet werden"
+    }
   }
 }

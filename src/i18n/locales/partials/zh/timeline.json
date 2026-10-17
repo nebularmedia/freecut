@@ -88,7 +88,14 @@
       "unreverse": "取消反向",
       "updatingCaptions": "正在更新字幕",
       "copyGrade": "复制调色",
-      "pasteGrade": "粘贴调色"
+      "pasteGrade": "粘贴调色",
+      "stabilizeClip": "片段防抖",
+      "stabilizing": "防抖处理中…",
+      "stabilizeStrength": {
+        "gentle": "轻微 — 裁切 {{crop}}%",
+        "standard": "标准 — 裁切 {{crop}}%",
+        "strong": "强 — 裁切 {{crop}}%"
+      }
     },
     "fadeHandles": {
       "adjustAudioFadeIn": "调整音频淡入",
@@ -319,8 +326,10 @@
       "enableSyncLock": "启用同步锁定",
       "enableTrack": "启用轨道",
       "lockTrack": "锁定轨道",
+      "muteTrack": "静音轨道",
       "soloTrack": "独奏轨道",
       "unlockTrack": "解锁轨道",
+      "unmuteTrack": "取消静音轨道",
       "unsoloTrack": "取消独奏"
     },
     "trackRow": {
@@ -337,6 +346,12 @@
       "adjustClipVolume": "调整剪辑音量"
     },
     "emptyTitle": "将媒体拖到这里开始编辑",
-    "emptyDescription": "把片段拖到轨道上，然后按空格键预览。"
+    "emptyDescription": "把片段拖到轨道上，然后按空格键预览。",
+    "stabilize": {
+      "analyzing": "正在测量镜头运动",
+      "rendering": "防抖处理中",
+      "toastDone": "片段已防抖",
+      "toastFailed": "无法应用防抖后的片段"
+    }
   }
 }

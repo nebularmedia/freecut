@@ -15,7 +15,7 @@ import {
 } from './lib/contract.mjs'
 import { prepareJob, renderJob, startHarness } from './lib/render-core.mjs'
 import { PageSession } from './lib/page-session.mjs'
-import { collectAddClipMedia, resolveMediaFile } from './lib/workspace.mjs'
+import { collectAddClipMedia, resolveMediaSource } from './lib/workspace.mjs'
 import {
   acquireWriterLock,
   assertAtomicReplace,
@@ -27,6 +27,7 @@ import {
   listProjectResources,
   rollbackStagedMedia,
   saveProjectResource,
+  stageLinkedMedia,
   stageLocalMedia,
   updateMediaMetadata,
 } from './lib/lifecycle-store.mjs'
@@ -42,6 +43,10 @@ const OPTIONS = new Set([
   'fps',
   'background-color',
   'file',
+  'url',
+  'proxy-url',
+  'file-name',
+  'mime',
   'ops',
   'persist',
   'expected-revision',
@@ -56,6 +61,7 @@ const OPTIONS = new Set([
   'container',
   'resolution',
   'quality',
+  'media-quality',
   'duration',
   'in',
   'out-sec',
@@ -128,6 +134,7 @@ async function run(argv = process.argv.slice(2)) {
           ...(args.resolution ? { resolution: args.resolution } : {}),
           ...(args.fps ? { fps: args.fps } : {}),
           ...(args.quality ? { quality: args.quality } : {}),
+          ...(args['media-quality'] ? { 'media-quality': args['media-quality'] } : {}),
           ...(args.duration ? { duration: args.duration } : {}),
           ...(args.in ? { in: args.in } : {}),
           ...(args['out-sec'] ? { 'out-sec': args['out-sec'] } : {}),
@@ -254,12 +261,15 @@ async function run(argv = process.argv.slice(2)) {
         force: Boolean(args.force),
       })
       const current = await getMediaResource(workspace, args.id)
-      const source = resolveMediaFile(workspace, args.id)
-      if (!source) throw new Error('Media source file is missing')
+      const source = resolveMediaSource(workspace, args.id, { quality: args['media-quality'] })
+      if (!source) throw new Error('Media source is missing')
       const probe = await withBrowser(workspace, args, (page, mediaUrlOf) =>
         page.evaluate((payload) => window.freecut.probeMedia(payload), {
-          url: mediaUrlOf(args.id),
-          fileName: path.basename(source),
+          url: mediaUrlOf(args.id, source.quality),
+          fileName:
+            source.kind === 'file'
+              ? path.basename(source.path)
+              : (source.fileName ?? current.metadata.fileName),
           mimeType: current.metadata.mimeType,
         }),
       )
@@ -283,6 +293,41 @@ async function run(argv = process.argv.slice(2)) {
         return envelope({
           media,
           duplicate: false,
+          ...(args.project ? { associatedProjectId: args.project } : {}),
+        })
+      } catch (error) {
+        if (staged) await rollbackStagedMedia(staged)
+        throw error
+      }
+    }
+    if (group === 'media' && action === 'link') {
+      if (!args.url && !args['proxy-url']) throw new Error('--url or --proxy-url is required')
+      let staged
+      try {
+        staged = await stageLinkedMedia(
+          workspace,
+          { original: args.url, proxy: args['proxy-url'] },
+          args.id,
+          {
+            ...(args['file-name'] ? { fileName: args['file-name'] } : {}),
+            ...(args.mime ? { mimeType: args.mime } : {}),
+          },
+        )
+        // Probed through our own media origin, exactly as the render will read
+        // it: if the relay can't serve this link, it fails now and not later.
+        const probe = await withBrowser(workspace, args, (page, mediaUrlOf) =>
+          page.evaluate((payload) => window.freecut.probeMedia(payload), {
+            url: mediaUrlOf(staged.id, staged.probeQuality),
+            fileName: staged.fileName,
+            mimeType: staged.mimeType,
+          }),
+        )
+        const media = await commitStagedMedia(staged, probe, { workspace, projectId: args.project })
+        return envelope({
+          media,
+          linked: true,
+          probedQuality: staged.probeQuality,
+          upstreamAcceptsRange: staged.acceptsRange,
           ...(args.project ? { associatedProjectId: args.project } : {}),
         })
       } catch (error) {

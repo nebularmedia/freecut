@@ -16,6 +16,8 @@ import { useSelectionStore } from '@/shared/state/selection'
 import { useMarqueeSelection } from '@/shared/marquee/use-marquee-selection'
 import { useWaveformPrefetch } from '../hooks/use-waveform-prefetch'
 import { useTimelineAudioSkimPreview } from '../hooks/use-timeline-audio-skim-preview'
+import { useUiMotionProfile } from '../deps/settings'
+import { resolveTimelineWheelGesture } from '@/config/ui-motion'
 import { withPerfMeasure, perfMarkRender } from '@/shared/logging/perf-marks'
 
 // Constants
@@ -25,6 +27,7 @@ import {
   SCROLL_MIN_VELOCITY,
   MOMENTUM_REF_FRAME_MS,
   SCROLL_SMOOTHING,
+  SCROLL_STEP_GAIN,
   SCROLL_GESTURE_TIMEOUT,
   ZOOM_FRICTION,
   ZOOM_MAX,
@@ -89,6 +92,24 @@ const FINE_ZOOM_FACTOR = 1.1
 const DENSE_TIMELINE_HOVER_PREVIEW_DELAY_MS = 150
 
 type TrackScrollbarSection = 'video' | 'audio' | 'single'
+
+/**
+ * Everything inside the timeline surface that answers a click itself, and so
+ * must not double as a place to park the playhead.
+ */
+const TIMELINE_CLICK_OWNER_SELECTOR = [
+  '[data-item-id]',
+  '[data-transition-id]',
+  '[data-timeline-marker]',
+  '[data-timeline-playhead]',
+  '[data-timeline-density-bucket]',
+  '[role="menu"]',
+  'button',
+  'a',
+  'input',
+  'select',
+  'textarea',
+].join(',')
 
 function revealTrackInScrollContainer(container: HTMLDivElement | null, trackId: string): boolean {
   if (!container) {
@@ -753,6 +774,13 @@ export const TimelineContent = memo(function TimelineContent({
   // Prefetch waveforms for clips approaching the viewport
   useWaveformPrefetch()
 
+  // Which editor's motion the mouse follows (see config/ui-motion). The wheel
+  // handler reads it through a ref so a mode switch never re-attaches the
+  // listener mid-gesture.
+  const motionProfile = useUiMotionProfile()
+  const motionProfileRef = useRef(motionProfile)
+  motionProfileRef.current = motionProfile
+
   // Use granular selectors - Zustand v5 best practice
   const fps = useTimelineStore((s) => s.fps)
 
@@ -1308,6 +1336,22 @@ export const TimelineContent = memo(function TimelineContent({
     }
   }, [])
 
+  // Park the playhead at a horizontal position inside the timeline. Reads the
+  // frame straight off the pointer instead of the hover ghost, so it also works
+  // in the empty room above, below and past the tracks — where no ghost exists.
+  const seekToClientX = useCallback((clientX: number) => {
+    const scrollContainer = containerRef.current
+    if (!scrollContainer) return
+
+    const rect = scrollContainer.getBoundingClientRect()
+    const x = clientX - rect.left + scrollContainer.scrollLeft
+    const frame = Math.max(
+      0,
+      Math.min(Math.round(pixelsToFrameRef.current(x)), maxTimelineFrameRef.current),
+    )
+    usePlaybackStore.getState().finishScrub(frame)
+  }, [])
+
   // Click empty space to deselect items and markers (but preserve track selection)
   const handleContainerClick = (e: React.MouseEvent) => {
     // Don't deselect if marquee selection, drag, or scrubbing just finished
@@ -1329,6 +1373,13 @@ export const TimelineContent = memo(function TimelineContent({
     if (!clickedOnItem) {
       clearItemSelection()
       selectMarker(null) // Also clear marker selection
+
+      // CapCut motion parks the playhead wherever you click in the timeline —
+      // top to bottom, tracks or the empty room around them. Only the things
+      // that own their own click are spared.
+      if (motionProfile.backgroundClickSeeks && !target.closest(TIMELINE_CLICK_OWNER_SELECTOR)) {
+        seekToClientX(e.clientX)
+      }
     }
   }
 
@@ -1837,6 +1888,44 @@ export const TimelineContent = memo(function TimelineContent({
     [],
   )
 
+  // Where a tracks gesture lands. Outside a pane there is nothing under the
+  // pointer to scroll, so a mode that spends its bare wheel on the tracks falls
+  // back to the main pane rather than leaving dead zones over the ruler and the
+  // empty room around the rows.
+  const resolveTrackScrollTarget = useCallback(
+    (target: EventTarget | null): HTMLDivElement | null => {
+      const hovered = getVerticalScrollTarget(target)
+      if (hovered || motionProfileRef.current.trackScrollFallback === 'pointer') {
+        return hovered
+      }
+
+      // Read the panes off the DOM rather than the scroll refs: those are
+      // optional props the parent may not have handed down.
+      const panes = containerRef.current?.querySelectorAll<HTMLDivElement>(
+        '[data-track-section-scroll]',
+      )
+      if (!panes || panes.length === 0) return null
+
+      // Picture is the pane that carries the edit, so it wins when both exist.
+      for (const pane of panes) {
+        if (pane.dataset.trackSectionScroll === 'video') return pane
+      }
+      return panes[0] ?? null
+    },
+    [getVerticalScrollTarget],
+  )
+
+  // A wheel burst can outpace the display, so coalesce the linked-panel
+  // notification to one per frame the way the momentum loop already does.
+  const liveScrollNotifyRafRef = useRef<number | null>(null)
+  const scheduleLiveScrollNotification = useCallback((container: HTMLDivElement) => {
+    if (liveScrollNotifyRafRef.current !== null) return
+    liveScrollNotifyRafRef.current = requestAnimationFrame(() => {
+      liveScrollNotifyRafRef.current = null
+      notifyTimelineLiveScroll(container)
+    })
+  }, [])
+
   // Momentum scroll/zoom loop using requestAnimationFrame
   const startMomentumScroll = useCallback(() => {
     // Already running: the wheel handler has updated the velocity refs in place,
@@ -1977,6 +2066,9 @@ export const TimelineContent = memo(function TimelineContent({
       if (zoomApplyRafRef.current !== null) {
         cancelAnimationFrame(zoomApplyRafRef.current)
       }
+      if (liveScrollNotifyRafRef.current !== null) {
+        cancelAnimationFrame(liveScrollNotifyRafRef.current)
+      }
     }
   }, [])
 
@@ -2001,8 +2093,16 @@ export const TimelineContent = memo(function TimelineContent({
         velocityZoomRef.current = 0
       }
 
-      // Ctrl/Cmd + scroll = discrete zoom in 10% increments (anchored to cursor position)
-      if (event.ctrlKey || event.metaKey) {
+      // One place decides what the gesture means; the mode owns the mapping.
+      const gesture = resolveTimelineWheelGesture(motionProfileRef.current, {
+        ctrl: event.ctrlKey || event.metaKey,
+        alt: event.altKey,
+        shift: event.shiftKey,
+        horizontal: Math.abs(event.deltaX) > Math.abs(event.deltaY),
+      })
+
+      // Zoom in discrete 15% increments, anchored to the cursor position
+      if (gesture === 'zoom') {
         velocityXRef.current = 0
         velocityYRef.current = 0
         velocityZoomRef.current = 0
@@ -2022,8 +2122,8 @@ export const TimelineContent = memo(function TimelineContent({
         return
       }
 
-      // Alt + scroll = resize track heights in the hovered zone
-      if (event.altKey) {
+      // Resize track heights in the hovered zone
+      if (gesture === 'track-height') {
         const sectionEl =
           event.target instanceof Element
             ? (event.target.closest('[data-track-section-scroll]') as HTMLElement | null)
@@ -2044,18 +2144,38 @@ export const TimelineContent = memo(function TimelineContent({
       // Reset zoom velocity for scroll operations
       velocityZoomRef.current = 0
       const smoothingFactor = 1 - SCROLL_SMOOTHING
+      const scrollsInSteps = motionProfileRef.current.scrollFeel === 'step'
+      const walksTracks = gesture === 'tracks'
+      const delta =
+        (walksTracks ? event.deltaX || event.deltaY : event.deltaY || event.deltaX) *
+        SCROLL_SENSITIVITY
 
-      // Shift + scroll = vertical scroll ONLY
-      if (event.shiftKey) {
-        verticalScrollTargetRef.current = getVerticalScrollTarget(event.target)
+      verticalScrollTargetRef.current = walksTracks ? resolveTrackScrollTarget(event.target) : null
+
+      // Direct step: land the whole distance now and stop dead. No velocity is
+      // seeded, so the momentum loop has nothing to coast on.
+      if (scrollsInSteps) {
         velocityXRef.current = 0
-        const delta = (event.deltaX || event.deltaY) * SCROLL_SENSITIVITY
+        velocityYRef.current = 0
+        const step = delta * SCROLL_STEP_GAIN
+
+        if (walksTracks) {
+          const verticalTarget = verticalScrollTargetRef.current
+          if (verticalTarget) verticalTarget.scrollTop += step
+        } else {
+          container.scrollLeft += step
+          // Linked panels live outside this native scroller. The glide path
+          // notifies them once per momentum frame; a step has to do it itself.
+          scheduleLiveScrollNotification(container)
+        }
+        return
+      }
+
+      if (walksTracks) {
+        velocityXRef.current = 0
         velocityYRef.current = velocityYRef.current * smoothingFactor + delta * SCROLL_SMOOTHING
       } else {
-        verticalScrollTargetRef.current = null
-        // Default scroll = horizontal scroll ONLY
         velocityYRef.current = 0
-        const delta = (event.deltaY || event.deltaX) * SCROLL_SENSITIVITY
         velocityXRef.current = velocityXRef.current * smoothingFactor + delta * SCROLL_SMOOTHING
       }
 
@@ -2071,8 +2191,9 @@ export const TimelineContent = memo(function TimelineContent({
   }, [
     applyZoomWithCursorAnchor,
     cancelPendingHoverPreview,
-    getVerticalScrollTarget,
     hasTrackSections,
+    resolveTrackScrollTarget,
+    scheduleLiveScrollNotification,
     showZoomInteractionShield,
     startMomentumScroll,
   ])

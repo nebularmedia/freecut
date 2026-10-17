@@ -2,6 +2,7 @@ import type { MediaAttribution, MediaMetadata } from '@/types/storage'
 import type { TranscriptionProgressSnapshot } from '@/shared/utils/transcription-progress'
 import type { InterpolationStage } from './frame-interpolation-constants'
 import type { UpscaleStage } from './upscale-constants'
+import type { StabilizeStage } from './stabilize-constants'
 
 export interface MediaLibraryNotification {
   type: 'info' | 'success' | 'warning' | 'error'
@@ -106,6 +107,13 @@ export interface MediaLibraryState {
   upscaleStage: Map<string, UpscaleStage>
   /** Seconds left in the render. Absent until the rate estimate warms up. */
   upscaleEtaSeconds: Map<string, number>
+
+  // Stabilisation, keyed by the SOURCE media id
+  stabilizeStatus: Map<string, 'generating' | 'ready' | 'error'>
+  stabilizeProgress: Map<string, number>
+  stabilizeStage: Map<string, StabilizeStage>
+  /** Seconds left in the current pass. Absent until the rate estimate warms up. */
+  stabilizeEtaSeconds: Map<string, number>
 
   // Transcript generation
   transcriptStatus: Map<string, MediaTranscriptStatus>
@@ -254,6 +262,16 @@ export interface MediaLibraryActions {
     mediaId: string,
     progress: number,
     stage: UpscaleStage,
+    etaSeconds?: number | null,
+  ) => void
+
+  // Stabilisation
+  setStabilizeStatus: (mediaId: string, status: 'generating' | 'ready' | 'error') => void
+  clearStabilizeStatus: (mediaId: string) => void
+  setStabilizeProgress: (
+    mediaId: string,
+    progress: number,
+    stage: StabilizeStage,
     etaSeconds?: number | null,
   ) => void
 

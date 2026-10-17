@@ -186,6 +186,22 @@ describe('workspace-fs projects', () => {
     await expect(deleteProject('missing')).resolves.toBeUndefined()
   })
 
+  // The factory moves an idea's folder INTO the project as `_idea/`, and that
+  // is the only copy of the brief. Deleting the project would take it along
+  // with the timeline, so the delete refuses instead — see `adopted-idea.ts`.
+  it('deleteProject refuses a project holding an adopted idea', async () => {
+    const root = createRoot()
+    setWorkspaceRoot(asHandle(root))
+    await createProject(makeProject('p1'))
+    const projects = await root.getDirectoryHandle('projects')
+    const project = await projects.getDirectoryHandle('p1')
+    await project.getDirectoryHandle('_idea', { create: true })
+
+    await expect(deleteProject('p1')).rejects.toThrow(/still holds its idea/)
+    // And it really is still there — refusing has to mean not deleting.
+    expect(await readFileText(root, 'projects', 'p1', 'project.json')).not.toBeNull()
+  })
+
   it('throws when no workspace root is set', async () => {
     setWorkspaceRoot(null)
     await expect(getAllProjects()).rejects.toThrow(/Workspace root is not set/)

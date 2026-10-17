@@ -368,6 +368,33 @@
         "cleared": "Borrado",
         "clear": "Borrar"
       },
+      "motion": {
+        "title": "Movimiento",
+        "subtitle": "A qué editor responden el ratón y el teclado",
+        "modes": {
+          "freecut": {
+            "title": "FreeCut",
+            "description": "La distribución de siempre: herramientas bajo la mano izquierda, la rueda recorre la línea de tiempo con deslizamiento por inercia, Mayús+rueda cambia de pista y Alt+rueda ajusta su altura."
+          },
+          "capcut": {
+            "title": "CapCut",
+            "description": "La memoria muscular de CapCut: Ctrl+B parte, Q/W se comen cada lado del cabezal, A/B cambian entre selección y cuchilla, [ y ] seleccionan hacia los lados, la rueda cambia de pista y Alt+rueda recorre, a saltos secos y sin deslizamiento."
+          }
+        },
+        "wheel": {
+          "label": "Rueda",
+          "auto": "Según el modo",
+          "travel": "Recorrer",
+          "tracks": "Entre pistas",
+          "zoom": "Zoom",
+          "hint": "Ctrl+rueda siempre hace zoom, y un gesto horizontal siempre recorre."
+        },
+        "firstRun": {
+          "title": "¿Cómo quieres que se mueva el editor?",
+          "description": "Elige la memoria muscular que ya tienes. Todos los atajos siguen siendo reasignables y puedes cambiar de modo cuando quieras desde el panel de atajos.",
+          "confirm": "Empezar a editar"
+        }
+      },
       "hotkeys": {
         "title": "Atajos de teclado",
         "subtitle": "— selecciona un comando y luego graba una nueva combinación",
@@ -453,10 +480,16 @@
           "goToEnd": "Ir al final",
           "previousSnapPoint": "Punto de ajuste anterior",
           "nextSnapPoint": "Punto de ajuste siguiente",
+          "jumpFrames": "Saltar varios fotogramas atrás / adelante",
           "splitAtPlayhead": "Dividir en el cabezal de reproducción",
           "joinSelectedClips": "Unir los clips seleccionados",
           "deleteSelectedItems": "Eliminar los elementos seleccionados",
           "rippleDeleteSelectedItems": "Eliminación en cascada de los elementos seleccionados",
+          "deleteBesidePlayhead": "Borrar a la izquierda / derecha del cabezal",
+          "selectSideOfPlayhead": "Seleccionar a la izquierda / derecha del cabezal",
+          "deselectAll": "Deseleccionar todo",
+          "toggleMainTrackMagnet": "Activar o desactivar el imán de la pista principal",
+          "nudgeVolume": "Subir / bajar el volumen del clip 0,1 dB",
           "insertFreezeFrame": "Insertar fotograma congelado en el cabezal de reproducción",
           "linkSelectedClips": "Vincular los clips seleccionados",
           "unlinkSelectedClips": "Desvincular los clips seleccionados",

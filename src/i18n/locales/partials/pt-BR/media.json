@@ -300,6 +300,10 @@
       "importAnyway": "Importar mesmo assim",
       "note": "Observacao",
       "title": "Codec não suportado"
+    },
+    "autoProxy": {
+      "queued_one": "Gerando uma cópia mais leve de 1 clipe pesado para a reprodução acompanhar",
+      "queued_other": "Gerando cópias mais leves de {{count}} clipes pesados para a reprodução acompanhar"
     }
   }
 }

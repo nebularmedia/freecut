@@ -88,7 +88,14 @@
       "unreverse": "반전 해제",
       "updatingCaptions": "자막 업데이트 중",
       "copyGrade": "색 보정 복사",
-      "pasteGrade": "색 보정 붙여넣기"
+      "pasteGrade": "색 보정 붙여넣기",
+      "stabilizeClip": "클립 흔들림 보정",
+      "stabilizing": "흔들림 보정 중…",
+      "stabilizeStrength": {
+        "gentle": "약하게 — {{crop}}% 크롭",
+        "standard": "표준 — {{crop}}% 크롭",
+        "strong": "강하게 — {{crop}}% 크롭"
+      }
     },
     "fadeHandles": {
       "adjustAudioFadeIn": "오디오 페이드 인 조정",
@@ -319,8 +326,10 @@
       "enableSyncLock": "동기화 잠금 활성화",
       "enableTrack": "트랙 활성화",
       "lockTrack": "트랙 잠금",
+      "muteTrack": "트랙 음소거",
       "soloTrack": "트랙 솔로",
       "unlockTrack": "트랙 잠금 해제",
+      "unmuteTrack": "트랙 음소거 해제",
       "unsoloTrack": "솔로 해제"
     },
     "trackRow": {
@@ -337,6 +346,12 @@
       "adjustClipVolume": "클립 볼륨 조정"
     },
     "emptyTitle": "편집을 시작하려면 여기에 미디어를 드래그하세요",
-    "emptyDescription": "클립을 트랙에 놓은 다음 Space를 눌러 미리 봅니다."
+    "emptyDescription": "클립을 트랙에 놓은 다음 Space를 눌러 미리 봅니다.",
+    "stabilize": {
+      "analyzing": "카메라 움직임 측정 중",
+      "rendering": "흔들림 보정 중",
+      "toastDone": "클립 보정 완료",
+      "toastFailed": "보정된 클립을 적용하지 못했습니다"
+    }
   }
 }

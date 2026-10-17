@@ -27,7 +27,9 @@ import {
   reverseItems,
   splitItemAtFrames,
   unlinkItems,
+  updateItem,
 } from '../../stores/actions/item-actions'
+import { importMediaLibraryService } from '../../deps/media-library-service'
 import {
   createPreComp,
   dissolvePreComp,
@@ -49,6 +51,12 @@ import {
   type VerificationModel,
 } from '../../deps/analysis'
 import { resolveMediaUrl } from '../../deps/media-library-resolver'
+import {
+  stabilizeService,
+  STRENGTH_CROP_RATIO,
+  type StabilizeStrength,
+} from '../../deps/media-library-stabilize'
+import { getItemSourceSpanSeconds } from '../../utils/media-item-frames'
 import { useBentoLayoutDialogStore } from '../bento-layout-dialog-store'
 import { createLogger } from '@/shared/logging/logger'
 import { saveScenes } from '@/infrastructure/storage/workspace-fs/scenes'
@@ -62,6 +70,7 @@ import { mapSceneCutTimesToTimelineFrames } from '../../utils/scene-cut-frames'
 const logger = createLogger('UseTimelineItemActions')
 
 const SCENE_DETECTION_OVERLAY_ID = 'scene-detection'
+const STABILIZE_OVERLAY_ID = 'stabilize'
 
 interface SelectionCapabilities {
   canJoin: boolean
@@ -329,6 +338,34 @@ export function useTimelineItemActions({
     (overlay) => overlay.id === SCENE_DETECTION_OVERLAY_ID,
   )
 
+  // Stabilization progress is published by the media-library store, keyed by whatever id the job
+  // was filed under — the clip's, for jobs started here. Mirroring it into the clip's overlay puts
+  // the bar on the thing the user is waiting for rather than on a library card they may not have
+  // open.
+  const stabilizeStatus = useMediaLibraryStore((s) => s.stabilizeStatus.get(item.id))
+  const stabilizeProgress = useMediaLibraryStore((s) => s.stabilizeProgress.get(item.id))
+  const stabilizeStage = useMediaLibraryStore((s) => s.stabilizeStage.get(item.id))
+  const isStabilizing = stabilizeStatus === 'generating'
+
+  useEffect(() => {
+    const overlayStore = useTimelineItemOverlayStore.getState()
+    if (!isStabilizing) {
+      overlayStore.removeOverlay(item.id, STABILIZE_OVERLAY_ID)
+      return
+    }
+    // The two passes are separately paced, so each reports its own 0..1 rather than pretending to
+    // be halves of one bar that would stall at 50%.
+    overlayStore.upsertOverlay(item.id, {
+      id: STABILIZE_OVERLAY_ID,
+      label:
+        stabilizeStage === 'rendering'
+          ? i18n.t('timeline.stabilize.rendering')
+          : i18n.t('timeline.stabilize.analyzing'),
+      progress: stabilizeProgress ?? 0,
+      tone: 'info',
+    })
+  }, [item.id, isStabilizing, stabilizeStage, stabilizeProgress])
+
   const isCompositionItem =
     item.type === 'composition' || (item.type === 'audio' && !!item.compositionId)
   const sourceStart = 'sourceStart' in item ? item.sourceStart : undefined
@@ -366,6 +403,96 @@ export function useTimelineItemActions({
       sceneDetectionAbortRef.current?.abort()
     }
   }, [])
+
+  /**
+   * Stabilize just this clip.
+   *
+   * The render covers the clip's own source span, not the whole file. That is both the cheap
+   * reading and the correct one: the camera path is smoothed over exactly the frames that play, so
+   * the start of the clip is treated as the start of a shot rather than as the middle of a move
+   * that began before the cut.
+   *
+   * The result comes back as a new library item and this clip is repointed at it, keeping its
+   * position, length, speed, transform and effects. Other clips cut from the same source are left
+   * alone — stabilization is a decision about one shot.
+   */
+  const handleStabilizeClip = useCallback(
+    (strength: StabilizeStrength) => {
+      if (item.type !== 'video' || !item.mediaId || isBroken) return
+
+      const clipId = item.id
+      const mediaId = item.mediaId
+      const libraryState = useMediaLibraryStore.getState()
+      const projectId = libraryState.currentProjectId
+      const media = libraryState.mediaById[mediaId]
+      if (!projectId || !media) return
+      // Progress is keyed by the clip, so two clips from one source can run independently.
+      if (stabilizeService.isGenerating(clipId)) return
+
+      const timelineFps = useTimelineStore.getState().fps
+      const span = getItemSourceSpanSeconds(item, timelineFps)
+      if (!span || span.end <= span.start) return
+
+      stabilizeService.generate({
+        mediaId: clipId,
+        projectId,
+        fileName: media.fileName,
+        source:
+          media.storageType === 'opfs' && media.opfsPath
+            ? { kind: 'opfs', path: media.opfsPath, mimeType: media.mimeType }
+            : async () => {
+                const { mediaLibraryService } = await importMediaLibraryService()
+                return mediaLibraryService.getMediaFile(mediaId)
+              },
+        sourceFps: media.fps,
+        cropRatio: STRENGTH_CROP_RATIO[strength],
+        range: { startSeconds: span.start, endSeconds: span.end },
+        onImported: (stabilized) => {
+          void (async () => {
+            try {
+              // The clip can be deleted while the render runs. The stabilized media stays in the
+              // library either way — it is a real render the user paid for — but there is nothing
+              // left to repoint.
+              if (!useItemsStore.getState().itemById[clipId]) return
+              // `src` is an ephemeral blob URL — it has to be re-resolved for the live session,
+              // while `mediaId` is what survives a reload.
+              const src = await resolveMediaUrl(stabilized.id)
+              const sourceFps = stabilized.fps > 0 ? stabilized.fps : timelineFps
+              const sourceFrames = Math.max(1, Math.round(stabilized.duration * sourceFps))
+
+              updateItem(clipId, {
+                mediaId: stabilized.id,
+                src,
+                // The render already covers only this clip, so the new source starts where the
+                // clip starts and the trim collapses to nothing.
+                sourceStart: 0,
+                sourceEnd: sourceFrames,
+                sourceDuration: sourceFrames,
+                sourceFps,
+                trimStart: 0,
+                trimEnd: 0,
+                thumbnailUrl: undefined,
+                // Every reverse conform describes ranges of the old source and is now a lie.
+                reverseConformSrc: undefined,
+                reverseConformPath: undefined,
+                reverseConformKey: undefined,
+                reverseConformPreviewSrc: undefined,
+                reverseConformPreviewPath: undefined,
+                reverseConformPreviewKey: undefined,
+                reverseConformStatus: undefined,
+                reverseConformLocalStart: undefined,
+              })
+              toast.success(i18n.t('timeline.stabilize.toastDone'))
+            } catch (error) {
+              logger.error('Failed to repoint clip at the stabilized render', { clipId, error })
+              toast.error(i18n.t('timeline.stabilize.toastFailed'))
+            }
+          })()
+        },
+      })
+    },
+    [item, isBroken],
+  )
 
   const handleDetectScenes = useCallback(
     (method: SceneDetectionMethod, verificationModel?: VerificationModel) => {
@@ -593,6 +720,7 @@ export function useTimelineItemActions({
     getCanUnlinkSelected,
     hasSpeakableText,
     isSceneDetectionActive,
+    isStabilizing,
     isRemovingFillers,
     isCompositionItem,
     handleJoinSelected,
@@ -613,6 +741,7 @@ export function useTimelineItemActions({
     handleEnterComposition,
     handleDissolveComposition,
     handleDetectScenes,
+    handleStabilizeClip,
     handleRemoveSilence,
     handleRemoveFillers,
   }

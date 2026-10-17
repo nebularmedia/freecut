@@ -3,8 +3,13 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { pipeline } from 'node:stream/promises'
-import { HttpError, assertSinglePathComponent, resolveContained } from './http-security.mjs'
-import { resolveMediaFile } from './workspace.mjs'
+import {
+  HttpError,
+  assertSinglePathComponent,
+  assertUpstreamMediaUrl,
+  resolveContained,
+} from './http-security.mjs'
+import { readMediaLink, resolveMediaFile } from './workspace.mjs'
 
 const locks = new Map()
 const PORTABLE_ID = /^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/
@@ -368,11 +373,16 @@ export async function getMediaResource(workspace, id) {
         projectIds.push(entry.name)
     } catch {}
   }
+  // A linked media has no bytes here and is still perfectly renderable, so it
+  // counts as available — `sourceKind` is what says where it actually lives.
+  const hasFile = Boolean(resolveMediaFile(workspace, id))
+  const hasLink = !hasFile && Boolean(readMediaLink(workspace, id))
   return {
     id,
     revision: resource.revision,
     metadata: resource.value,
-    sourceAvailable: Boolean(resolveMediaFile(workspace, id)),
+    sourceAvailable: hasFile || hasLink,
+    sourceKind: hasFile ? 'file' : hasLink ? 'link' : null,
     projectIds,
   }
 }
@@ -467,6 +477,74 @@ export async function stageLocalMedia(
   } catch (error) {
     await fs.promises.rm(dir, { recursive: true, force: true })
     throw error
+  }
+}
+
+/**
+ * Register a media that stays on another host: writes
+ * `media/{id}/source.link.json` and nothing else. No bytes are copied, and the
+ * render reads it through the local media origin (see upstream-media.mjs).
+ *
+ * `sources.original` and/or `sources.proxy`. The upstream is contacted once,
+ * for a single byte, so a typo or an expired link fails here — while it is
+ * still a link being registered — instead of halfway through a render. Its
+ * `content-length` fills `fileSize` when the host reports one.
+ */
+export async function stageLinkedMedia(workspace, sources, id = crypto.randomUUID(), options = {}) {
+  assertPortableId(id, 'media id')
+  const entries = Object.entries(sources ?? {}).filter(([, url]) => Boolean(url))
+  if (entries.length === 0)
+    throw new HttpError(400, 'INVALID_MEDIA_LINK', 'A linked media needs at least one source URL')
+  const checked = Object.fromEntries(
+    entries.map(([quality, url]) => [
+      quality,
+      assertUpstreamMediaUrl(url, `${quality} source url`),
+    ]),
+  )
+  const probeUrl = checked.original ?? checked.proxy
+  const fileName = options.fileName ?? path.basename(new URL(probeUrl).pathname) ?? 'source.bin'
+  const ext = path.extname(fileName).toLowerCase()
+  const mimeType = options.mimeType ?? MIME_BY_EXT[ext]
+  if (!mimeType) throw new HttpError(415, 'UNSUPPORTED_MEDIA_TYPE', 'Unsupported media type')
+
+  let fileSize = 0
+  let reachable
+  try {
+    reachable = await fetch(probeUrl, { headers: { range: 'bytes=0-0' } })
+  } catch (error) {
+    throw new HttpError(502, 'UPSTREAM_MEDIA_FAILED', `Source URL unreachable: ${error.message}`)
+  }
+  reachable.body?.cancel().catch(() => {})
+  if (!reachable.ok)
+    throw new HttpError(502, 'UPSTREAM_MEDIA_FAILED', `Source URL responded ${reachable.status}`)
+  // 206 means the host honours Range and `content-length` is just our one byte;
+  // the total is the tail of `content-range`. A 200 means it ignored the Range
+  // and would hand the whole file over on every read — worth knowing, and the
+  // reason `content-length` is trustworthy there.
+  const total = /\/(\d+)$/.exec(reachable.headers.get('content-range') ?? '')?.[1]
+  fileSize = Number(total ?? reachable.headers.get('content-length') ?? 0) || 0
+  const acceptsRange = reachable.status === 206
+
+  const dir = resolveContained(path.join(workspace, 'media'), id)
+  if (fs.existsSync(dir)) throw new HttpError(409, 'ALREADY_EXISTS', 'Media already exists')
+  await fs.promises.mkdir(path.join(workspace, 'media'), { recursive: true })
+  await fs.promises.mkdir(dir, { recursive: false })
+  const descriptor = { version: '1.0', fileName, mimeType, sources: checked }
+  await atomicWriteFile(
+    path.join(dir, 'source.link.json'),
+    Buffer.from(`${JSON.stringify(descriptor, null, 2)}\n`),
+  )
+  return {
+    id,
+    dir,
+    fileName,
+    fileSize,
+    fileLastModified: Date.now(),
+    mimeType,
+    linked: true,
+    acceptsRange,
+    probeUrl,
+    probeQuality: checked.original ? 'original' : 'proxy',
   }
 }
 

@@ -14,7 +14,7 @@ import type { TimelineShortcutCallbacks } from '../use-timeline-shortcuts'
 import { useSourcePlayerStore } from '@/shared/state/source-player'
 import { getFilteredItemSnapEdges } from '../../utils/timeline-snap-utils'
 import { getVisibleTrackIds } from '../../utils/group-utils'
-import { useResolvedHotkeys } from '@/features/timeline/deps/settings'
+import { useResolvedHotkeys, useUiMotionProfile } from '@/features/timeline/deps/settings'
 
 /** Compute snap points on-demand from current store state (avoids reactive subscriptions). */
 function getSnapPoints(): number[] {
@@ -36,6 +36,7 @@ function getSnapPoints(): number[] {
 
 export function usePlaybackShortcuts(callbacks: TimelineShortcutCallbacks) {
   const hotkeys = useResolvedHotkeys()
+  const jumpFrames = useUiMotionProfile().jumpFrames
   const togglePlayPause = usePlaybackStore((s) => s.togglePlayPause)
   const shuttleForward = usePlaybackStore((s) => s.shuttleForward)
   const shuttleReverse = usePlaybackStore((s) => s.shuttleReverse)
@@ -174,6 +175,40 @@ export function usePlaybackShortcuts(callbacks: TimelineShortcutCallbacks) {
     },
     HOTKEY_OPTIONS,
     [commitTimelineSeek],
+  )
+
+  // Navigation: stride the playhead. Unbound in FreeCut motion; CapCut motion
+  // puts it on Shift+Left / Shift+Right.
+  useHotkeys(
+    hotkeys.JUMP_BACKWARD,
+    (event) => {
+      event.preventDefault()
+      const { hoveredPanel, playerMethods } = useSourcePlayerStore.getState()
+      if (hoveredPanel === 'source' && playerMethods) {
+        playerMethods.frameBack(jumpFrames)
+        return
+      }
+      const currentFrame = usePlaybackStore.getState().currentFrame
+      commitTimelineSeek(Math.max(0, currentFrame - jumpFrames))
+    },
+    HOTKEY_OPTIONS,
+    [commitTimelineSeek, jumpFrames],
+  )
+
+  useHotkeys(
+    hotkeys.JUMP_FORWARD,
+    (event) => {
+      event.preventDefault()
+      const { hoveredPanel, playerMethods } = useSourcePlayerStore.getState()
+      if (hoveredPanel === 'source' && playerMethods) {
+        playerMethods.frameForward(jumpFrames)
+        return
+      }
+      const currentFrame = usePlaybackStore.getState().currentFrame
+      commitTimelineSeek(currentFrame + jumpFrames)
+    },
+    HOTKEY_OPTIONS,
+    [commitTimelineSeek, jumpFrames],
   )
 
   // Navigation: Home - Go to start

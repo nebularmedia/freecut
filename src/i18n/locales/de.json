@@ -131,7 +131,9 @@
       "localAiDescription": "Lade speicherresidente Laufzeiten aus oder lösche zwischengespeicherte Modell-Downloads.",
       "clearCacheConfirmTitle": "Projekt-Cache leeren?",
       "clearCacheConfirmDescription": "Dadurch werden zwischengespeicherte Wellenformen, Video-Vorschaubilder, GIF-Bilder und dekodiertes Audio für das aktuelle Projekt ({{count}} Medienelemente) gelöscht. Sie werden bei Bedarf automatisch neu generiert. Deine Projektdaten, Mediendateien, Vorschaubilder und Proxys sind nicht betroffen.",
-      "clearCache": "Cache leeren"
+      "clearCache": "Cache leeren",
+      "autoProxyHeavyMedia": "Automatische Proxys für schwere Medien",
+      "autoProxyHeavyMediaDescription": "Erstellt von selbst eine leichtere Kopie für 4K, hohe Bildraten und Codecs, die die GPU nicht dekodieren kann"
     },
     "toasts": {
       "projectCacheCleared": "Projekt-Cache geleert",

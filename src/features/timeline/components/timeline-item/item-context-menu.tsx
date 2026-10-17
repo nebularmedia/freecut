@@ -28,8 +28,18 @@ import {
   type SceneDetectionMethod,
   type VerificationModel,
 } from '@/features/timeline/deps/analysis'
+import {
+  STABILIZE_STRENGTHS,
+  STRENGTH_CROP_RATIO,
+  type StabilizeStrength,
+} from '@/features/timeline/deps/media-library-stabilize'
 import { formatHotkeyBinding } from '@/config/hotkeys'
 import { useResolvedHotkeys } from '@/features/timeline/deps/settings'
+
+/** Framing given up at a strength, as a whole percentage — what the menu label promises. */
+function stabilizeCropPercent(strength: StabilizeStrength): number {
+  return Math.round((1 - STRENGTH_CROP_RATIO[strength]) * 100)
+}
 
 type ItemContextMenuSectionProps = {
   t: ReturnType<typeof useTranslation>['t']
@@ -57,6 +67,15 @@ type KeyframeActionsProps = ItemContextMenuSectionProps & {
   propertiesWithKeyframes: PropertyKeyframes[]
   onClearAllKeyframes?: () => void
   onClearPropertyKeyframes?: (property: AnimatableProperty) => void
+}
+
+type StabilizeActionsProps = ItemContextMenuSectionProps & {
+  canStabilize: boolean
+  isStabilizing: boolean
+  stabilizeStrengths: readonly StabilizeStrength[]
+  /** Framing given up at this strength, as a whole percentage, for the label. */
+  strengthCropPercent: (strength: StabilizeStrength) => number
+  onStabilize?: (strength: StabilizeStrength) => void
 }
 
 type SceneDetectionActionsProps = ItemContextMenuSectionProps & {
@@ -131,6 +150,11 @@ type SceneDetectionActionsConfig = Omit<
   keyof ItemContextMenuSectionProps | 'sceneVerificationModelOptions'
 >
 
+type StabilizeActionsConfig = Omit<
+  StabilizeActionsProps,
+  keyof ItemContextMenuSectionProps | 'stabilizeStrengths' | 'strengthCropPercent'
+>
+
 type LayoutActionsConfig = {
   onBentoLayout?: () => void
 }
@@ -145,6 +169,7 @@ interface ItemContextMenuProps {
   layoutActions?: LayoutActionsConfig
   mediaActions?: MediaActionsConfig
   sceneDetectionActions?: SceneDetectionActionsConfig
+  stabilizeActions?: StabilizeActionsConfig
   captionActions?: CaptionActionsConfig
   compositionActions?: CompositionActionsConfig
 }
@@ -168,6 +193,7 @@ export const ItemContextMenu = memo(function ItemContextMenu({
   layoutActions,
   mediaActions,
   sceneDetectionActions,
+  stabilizeActions,
   captionActions,
   compositionActions,
 }: ItemContextMenuProps) {
@@ -202,6 +228,7 @@ export const ItemContextMenu = memo(function ItemContextMenu({
       layoutActions={layoutActions}
       mediaActions={mediaActions}
       sceneDetectionActions={sceneDetectionActions}
+      stabilizeActions={stabilizeActions}
       captionActions={captionActions}
       compositionActions={compositionActions}
       pendingActivation={pendingActivation}
@@ -254,6 +281,7 @@ const ItemContextMenuFull = memo(function ItemContextMenuFull({
   layoutActions,
   mediaActions,
   sceneDetectionActions,
+  stabilizeActions,
   captionActions,
   compositionActions,
   pendingActivation,
@@ -317,6 +345,15 @@ const ItemContextMenuFull = memo(function ItemContextMenuFull({
             hotkeys={hotkeys}
             sceneVerificationModelOptions={sceneVerificationModelOptions}
             {...sceneDetectionActions}
+          />
+        )}
+        {stabilizeActions && (
+          <StabilizeActions
+            t={t}
+            hotkeys={hotkeys}
+            stabilizeStrengths={STABILIZE_STRENGTHS}
+            strengthCropPercent={stabilizeCropPercent}
+            {...stabilizeActions}
           />
         )}
         {captionActions && <CaptionActions t={t} hotkeys={hotkeys} {...captionActions} />}
@@ -560,6 +597,44 @@ function MediaActions({
           <ContextMenuSeparator />
         </>
       )}
+    </>
+  )
+}
+
+/**
+ * Stabilization applies to THIS clip and only to the span it plays. The strengths differ solely in
+ * how much framing they may spend — a steadier result is always bought with a tighter crop, and
+ * saying so in the label is more useful than calling them low, medium and high.
+ */
+function StabilizeActions({
+  t,
+  canStabilize,
+  isStabilizing,
+  stabilizeStrengths,
+  strengthCropPercent,
+  onStabilize,
+}: StabilizeActionsProps) {
+  if (!canStabilize || !onStabilize) return null
+
+  return (
+    <>
+      {isStabilizing ? (
+        <ContextMenuItem disabled>{t('timeline.contextMenu.stabilizing')}</ContextMenuItem>
+      ) : (
+        <ContextMenuSub>
+          <ContextMenuSubTrigger>{t('timeline.contextMenu.stabilizeClip')}</ContextMenuSubTrigger>
+          <ContextMenuSubContent className="w-48">
+            {stabilizeStrengths.map((strength) => (
+              <ContextMenuItem key={strength} onClick={() => onStabilize(strength)}>
+                {t(`timeline.contextMenu.stabilizeStrength.${strength}`, {
+                  crop: strengthCropPercent(strength),
+                })}
+              </ContextMenuItem>
+            ))}
+          </ContextMenuSubContent>
+        </ContextMenuSub>
+      )}
+      <ContextMenuSeparator />
     </>
   )
 }

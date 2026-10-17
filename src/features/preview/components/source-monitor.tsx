@@ -636,9 +636,15 @@ function SourcePlaybackControls({
     [clearPreviewSourceFrame, player, updateFrameDisplay],
   )
 
-  // Bridge player methods into the source player store for keyboard shortcuts
+  // Bridge player methods into the source player store for keyboard shortcuts.
+  //
+  // Only while there is something to play. Transport keys are diverted here whenever this panel is
+  // hovered, so advertising control over a monitor with nothing loaded swallows them: Space would
+  // call `play()` on an empty player, nothing would happen, and the timeline — the thing the user
+  // was actually looking at — would never see the key. Staying quiet when the source has no
+  // frames lets those keys fall through to the timeline, the only sensible place for them then.
   useEffect(() => {
-    if (!interactive) return
+    if (!interactive || durationInFrames <= 0) return
     const setPlayerMethods = useSourcePlayerStore.getState().setPlayerMethods
     setPlayerMethods({
       toggle: () => {

@@ -300,6 +300,10 @@
       "importAnyway": "Importar de todos modos",
       "note": "Conviértelos a MP4 (H.264/AAC) o WebM para mayor compatibilidad.",
       "title": "Códec no compatible"
+    },
+    "autoProxy": {
+      "queued_one": "Generando una copia ligera de 1 clip pesado para que la reproducción aguante",
+      "queued_other": "Generando copias ligeras de {{count}} clips pesados para que la reproducción aguante"
     }
   }
 }

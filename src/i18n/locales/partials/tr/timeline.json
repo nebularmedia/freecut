@@ -88,7 +88,14 @@
       "unreverse": "Tersi kaldır",
       "updatingCaptions": "Altyazılar güncelleniyor",
       "copyGrade": "Renk düzenlemeyi kopyala",
-      "pasteGrade": "Renk düzenlemeyi yapıştır"
+      "pasteGrade": "Renk düzenlemeyi yapıştır",
+      "stabilizeClip": "Klibi sabitle",
+      "stabilizing": "Sabitleniyor…",
+      "stabilizeStrength": {
+        "gentle": "Hafif — %{{crop}} kırpma",
+        "standard": "Standart — %{{crop}} kırpma",
+        "strong": "Güçlü — %{{crop}} kırpma"
+      }
     },
     "fadeHandles": {
       "adjustAudioFadeIn": "Ses giriş yumuşatmasını ayarla",
@@ -315,8 +322,10 @@
       "enableSyncLock": "Senkron kilidini aç",
       "enableTrack": "Parçayı etkinleştir",
       "lockTrack": "Parçayı kilitle",
+      "muteTrack": "Parçayı sessize al",
       "soloTrack": "Parçayı solo yap",
       "unlockTrack": "Parça kilidini aç",
+      "unmuteTrack": "Parçanın sesini aç",
       "unsoloTrack": "Soloyu kapat"
     },
     "trackRow": {
@@ -333,6 +342,12 @@
       "adjustClipVolume": "Klip ses düzeyini ayarla"
     },
     "emptyTitle": "Düzenlemeye başlamak için medyayı buraya sürükleyin",
-    "emptyDescription": "Klipleri parçalara bırakın, ardından önizlemek için Boşluk tuşuna basın."
+    "emptyDescription": "Klipleri parçalara bırakın, ardından önizlemek için Boşluk tuşuna basın.",
+    "stabilize": {
+      "analyzing": "Kamera hareketi ölçülüyor",
+      "rendering": "Sabitleniyor",
+      "toastDone": "Klip sabitlendi",
+      "toastFailed": "Sabitlenmiş klip uygulanamadı"
+    }
   }
 }

@@ -10,26 +10,33 @@ import { useTimelineStore } from '../../stores/timeline-store'
 import { useSelectionStore } from '@/shared/state/selection'
 import { HOTKEY_OPTIONS } from '@/config/hotkeys'
 import { canJoinMultipleItems } from '@/features/timeline/utils/clip-utils'
+import { clampAudioVolumeDb } from '@/features/timeline/utils/audio-volume'
+import { getVisibleTrackIds } from '@/features/timeline/utils/group-utils'
+import { getMagnetTrackId } from '@/features/timeline/utils/magnet-track'
 import { canLinkSelection, hasLinkedItems } from '@/features/timeline/utils/linked-items'
 import {
   insertFreezeFrame,
   linkItems,
   splitAllItemsAtFrame,
+  trimItemEnd,
+  trimItemStart,
   unlinkItems,
 } from '../../stores/actions/item-actions'
 import type { TransformProperties } from '@/types/transform'
 import type { TimelineShortcutCallbacks } from '../use-timeline-shortcuts'
 import { useClearKeyframesDialogStore } from '@/shared/state/clear-keyframes-dialog'
-import { useResolvedHotkeys } from '@/features/timeline/deps/settings'
+import { useResolvedHotkeys, useUiMotionProfile } from '@/features/timeline/deps/settings'
 import { useKeyframeSelectionStore } from '../../stores/keyframe-selection-store'
 
 export function useEditingShortcuts(callbacks: TimelineShortcutCallbacks) {
   const hotkeys = useResolvedHotkeys()
+  const mainTrackMagnet = useUiMotionProfile().mainTrackMagnet
   const selectedItemIds = useSelectionStore((s) => s.selectedItemIds)
   const selectedMarkerId = useSelectionStore((s) => s.selectedMarkerId)
   const selectedTransitionId = useSelectionStore((s) => s.selectedTransitionId)
   const editKeyframePanelOpen = useSelectionStore((s) => s.editKeyframePanelOpen)
   const clearSelection = useSelectionStore((s) => s.clearSelection)
+  const selectItems = useSelectionStore((s) => s.selectItems)
   const selectedKeyframes = useKeyframeSelectionStore((s) => s.selectedKeyframes)
   const removeItems = useTimelineStore((s) => s.removeItems)
   const removeMarker = useTimelineStore((s) => s.removeMarker)
@@ -78,6 +85,27 @@ export function useEditingShortcuts(callbacks: TimelineShortcutCallbacks) {
     [selectedItemIds, items, updateItemsTransformMap],
   )
 
+  // With the main track magnet on, deleting a clip that lives on it closes the
+  // gap behind it — the CapCut behaviour. Anything else deletes in place.
+  const deleteSelectedItems = useCallback(() => {
+    if (selectedItemIds.length === 0) return
+
+    const { items: currentItems, tracks } = useTimelineStore.getState()
+    const magnetTrackId = mainTrackMagnet ? getMagnetTrackId(tracks) : null
+    const allOnMagnetTrack =
+      magnetTrackId !== null &&
+      selectedItemIds.every(
+        (id) => currentItems.find((entry) => entry.id === id)?.trackId === magnetTrackId,
+      )
+
+    if (allOnMagnetTrack) {
+      rippleDeleteItems(selectedItemIds)
+    } else {
+      removeItems(selectedItemIds)
+    }
+    callbacks.onDelete?.()
+  }, [callbacks, mainTrackMagnet, removeItems, rippleDeleteItems, selectedItemIds])
+
   // Editing: Delete - Delete selected items, marker, or transition
   useHotkeys(
     hotkeys.DELETE_SELECTED,
@@ -101,23 +129,19 @@ export function useEditingShortcuts(callbacks: TimelineShortcutCallbacks) {
       }
       if (selectedItemIds.length > 0) {
         event.preventDefault()
-        removeItems(selectedItemIds)
-        if (callbacks.onDelete) {
-          callbacks.onDelete()
-        }
+        deleteSelectedItems()
       }
     },
     HOTKEY_OPTIONS,
     [
       deleteOwnedByPanel,
+      deleteSelectedItems,
       selectedItemIds,
       selectedMarkerId,
       selectedTransitionId,
-      removeItems,
       removeMarker,
       removeTransition,
       clearSelection,
-      callbacks,
     ],
   )
 
@@ -144,23 +168,19 @@ export function useEditingShortcuts(callbacks: TimelineShortcutCallbacks) {
       }
       if (selectedItemIds.length > 0) {
         event.preventDefault()
-        removeItems(selectedItemIds)
-        if (callbacks.onDelete) {
-          callbacks.onDelete()
-        }
+        deleteSelectedItems()
       }
     },
     HOTKEY_OPTIONS,
     [
       deleteOwnedByPanel,
+      deleteSelectedItems,
       selectedItemIds,
       selectedMarkerId,
       selectedTransitionId,
-      removeItems,
       removeMarker,
       removeTransition,
       clearSelection,
-      callbacks,
     ],
   )
 
@@ -345,6 +365,148 @@ export function useEditingShortcuts(callbacks: TimelineShortcutCallbacks) {
     },
     HOTKEY_OPTIONS,
     [toggleLinkedSelectionEnabled],
+  )
+
+  // Q / W in CapCut motion: throw away everything on one side of the playhead
+  // inside the clip it is standing in. Acts on the selection, falling back to
+  // the clip under the pointer so it also works straight off a hover.
+  const deleteBesidePlayhead = useCallback(
+    (side: 'left' | 'right') => {
+      const { previewFrame, previewItemId, currentFrame } = usePlaybackStore.getState()
+      const frame = previewFrame ?? currentFrame
+      const { items: currentItems } = useTimelineStore.getState()
+      const straddlesPlayhead = (item: (typeof currentItems)[number]) =>
+        frame > item.from && frame < item.from + item.durationInFrames
+
+      const selected = currentItems.filter(
+        (item) => selectedItemIds.includes(item.id) && straddlesPlayhead(item),
+      )
+      const hovered = currentItems.find(
+        (item) => item.id === previewItemId && straddlesPlayhead(item),
+      )
+      const targets = selected.length > 0 ? selected : hovered ? [hovered] : []
+      if (targets.length === 0) return
+
+      const targetIds = targets.map((item) => item.id)
+      for (const item of targets) {
+        if (side === 'left') {
+          trimItemStart(item.id, frame - item.from, { itemIds: targetIds })
+        } else {
+          trimItemEnd(item.id, frame - (item.from + item.durationInFrames), { itemIds: targetIds })
+        }
+      }
+    },
+    [selectedItemIds],
+  )
+
+  useHotkeys(
+    hotkeys.DELETE_LEFT_OF_PLAYHEAD,
+    (event) => {
+      event.preventDefault()
+      deleteBesidePlayhead('left')
+    },
+    HOTKEY_OPTIONS,
+    [deleteBesidePlayhead],
+  )
+
+  useHotkeys(
+    hotkeys.DELETE_RIGHT_OF_PLAYHEAD,
+    (event) => {
+      event.preventDefault()
+      deleteBesidePlayhead('right')
+    },
+    HOTKEY_OPTIONS,
+    [deleteBesidePlayhead],
+  )
+
+  // [ and ] sweep the selection sideways from the playhead. A clip the playhead
+  // is standing in belongs to both sides, so it joins either sweep whole.
+  const selectSideOfPlayhead = useCallback(
+    (side: 'left' | 'right') => {
+      const { previewFrame, currentFrame } = usePlaybackStore.getState()
+      const frame = previewFrame ?? currentFrame
+      const { items: currentItems, tracks } = useTimelineStore.getState()
+      const visibleTrackIds = getVisibleTrackIds(tracks)
+      const lockedTrackIds = new Set(
+        tracks.filter((track) => track.locked).map((track) => track.id),
+      )
+
+      const swept = currentItems
+        .filter((item) => visibleTrackIds.has(item.trackId) && !lockedTrackIds.has(item.trackId))
+        .filter((item) =>
+          side === 'left' ? item.from < frame : item.from + item.durationInFrames > frame,
+        )
+        .map((item) => item.id)
+
+      if (swept.length > 0) selectItems(swept)
+    },
+    [selectItems],
+  )
+
+  useHotkeys(
+    hotkeys.SELECT_TO_LEFT,
+    (event) => {
+      event.preventDefault()
+      selectSideOfPlayhead('left')
+    },
+    HOTKEY_OPTIONS,
+    [selectSideOfPlayhead],
+  )
+
+  useHotkeys(
+    hotkeys.SELECT_TO_RIGHT,
+    (event) => {
+      event.preventDefault()
+      selectSideOfPlayhead('right')
+    },
+    HOTKEY_OPTIONS,
+    [selectSideOfPlayhead],
+  )
+
+  useHotkeys(
+    hotkeys.DESELECT_ALL,
+    (event) => {
+      event.preventDefault()
+      clearSelection()
+    },
+    HOTKEY_OPTIONS,
+    [clearSelection],
+  )
+
+  // Ride the volume of every selected audible clip in 0.1 dB steps.
+  const nudgeSelectedVolume = useCallback(
+    (deltaDb: number) => {
+      if (selectedItemIds.length === 0) return
+      const { items: currentItems, updateItem } = useTimelineStore.getState()
+      for (const itemId of selectedItemIds) {
+        const item = currentItems.find((entry) => entry.id === itemId)
+        if (!item || (item.type !== 'audio' && item.type !== 'video')) continue
+        const next = clampAudioVolumeDb(Math.round(((item.volume ?? 0) + deltaDb) * 10) / 10)
+        if (next === (item.volume ?? 0)) continue
+        updateItem(itemId, { volume: next })
+      }
+    },
+    [selectedItemIds],
+  )
+
+  useHotkeys(
+    hotkeys.VOLUME_UP,
+    (event) => {
+      event.preventDefault()
+      nudgeSelectedVolume(0.1)
+    },
+    HOTKEY_OPTIONS,
+    [nudgeSelectedVolume],
+  )
+
+  useHotkeys(
+    hotkeys.VOLUME_DOWN,
+    (event) => {
+      event.preventDefault()
+      nudgeSelectedVolume(-0.1)
+    },
+    HOTKEY_OPTIONS,
+    [nudgeSelectedVolume],
   )
 
   const splitAtPlayhead = useCallback((event: KeyboardEvent) => {

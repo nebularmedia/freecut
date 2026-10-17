@@ -1,5 +1,5 @@
 /**
- * Tool shortcuts: V (Select), T (Trim Edit), C (Razor), Shift+C (Split at cursor), R (Rate Stretch).
+ * Tool shortcuts: V (Select), T (Trim Edit), C (Razor), S (Split at cursor), R (Rate Stretch).
  */
 
 import { useHotkeys } from 'react-hotkeys-hook'
@@ -49,7 +49,7 @@ export function useToolShortcuts(callbacks: TimelineShortcutCallbacks) {
     [activeTool, setActiveTool],
   )
 
-  // Tool: Shift+C - Split hovered item at gray playhead (or main playhead)
+  // Tool: S - Split hovered item at gray playhead (or main playhead)
   useHotkeys(
     hotkeys.SPLIT_AT_CURSOR,
     (event) => {

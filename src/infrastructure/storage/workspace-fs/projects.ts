@@ -14,6 +14,7 @@ import type { Project } from '@/types/project'
 import { createLogger } from '@/shared/logging/logger'
 import { getHandle, saveHandle, deleteHandle } from '@/infrastructure/storage/handles-db'
 
+import { assertNoAdoptedIdea } from './adopted-idea'
 import { requireWorkspaceRoot } from './root'
 import {
   exists,
@@ -298,6 +299,11 @@ export async function updateProject(id: string, updates: Partial<Project>): Prom
 
 export async function deleteProject(id: string): Promise<void> {
   const root = requireWorkspaceRoot()
+  // The last stop before the directory is gone for good. Callers guard too, so
+  // they can bail before their own irreversible steps; this one is here because
+  // it is the only place that actually removes the tree, and a guard that can
+  // be bypassed by a new caller is not a guard. See `adopted-idea.ts`.
+  await assertNoAdoptedIdea(id)
   try {
     await removeEntry(root, projectDir(id), { recursive: true })
     await deleteHandle('project-folder', id).catch((error) => {

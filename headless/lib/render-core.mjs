@@ -8,8 +8,8 @@ import path from 'node:path'
 import {
   loadProject,
   collectMediaIds,
-  resolveMediaFiles,
-  resolveMediaFile,
+  resolveMediaSource,
+  resolveMediaSources,
   readMediaMetadata,
 } from './workspace.mjs'
 import { createMediaServer } from '../media-server.mjs'
@@ -125,7 +125,9 @@ async function ensureHarnessReachable(url) {
  * no-op.
  */
 export async function startHarness({ workspace, devUrl, build }) {
-  const resolveMedia = workspace ? (mediaId) => resolveMediaFile(workspace, mediaId) : undefined
+  const resolveMedia = workspace
+    ? (mediaId, quality) => resolveMediaSource(workspace, mediaId, { quality })
+    : undefined
   if (devUrl) {
     await ensureHarnessReachable(devUrl)
     if (!resolveMedia)
@@ -133,7 +135,7 @@ export async function startHarness({ workspace, devUrl, build }) {
     const mediaServer = await createMediaServer(resolveMedia)
     return {
       harnessUrl: devUrl,
-      mediaUrlOf: (id) => mediaServer.url(id),
+      mediaUrlOf: (id, quality) => mediaServer.url(id, quality),
       closeServers: () => mediaServer.close(),
     }
   }
@@ -150,7 +152,7 @@ export async function startHarness({ workspace, devUrl, build }) {
   const server = await createHarnessServer({ distDir, resolveMedia })
   return {
     harnessUrl: server.harnessUrl,
-    mediaUrlOf: (id) => server.mediaUrl(id),
+    mediaUrlOf: (id, quality) => server.mediaUrl(id, quality),
     closeServers: () => server.close(),
   }
 }
@@ -160,16 +162,30 @@ export async function startHarness({ workspace, devUrl, build }) {
  * the harness can consume. `range` ({ inFrame, outFrame }) limits collection to
  * media overlapping a slice; pass null for the whole project. Shared by the
  * render, frame-grab, and layout-dump paths (no browser involved).
+ *
+ * Every URL points at our own media origin even when the bytes live elsewhere:
+ * the server relays a linked source, so the page never sees a foreign host.
+ * `proxied` lists the media served from a light copy instead of the original.
  */
-export function resolveProjectMedia(workspace, project, mediaUrlOf, range = null) {
+export function resolveProjectMedia(
+  workspace,
+  project,
+  mediaUrlOf,
+  range = null,
+  { quality = 'original' } = {},
+) {
   const mediaIds = collectMediaIds(project, range)
-  const { files, missing } = resolveMediaFiles(workspace, mediaIds)
-  const media = [...files.keys()].map((id) => ({
-    mediaId: id,
-    url: mediaUrlOf(id),
-    metadata: readMediaMetadata(workspace, id) ?? undefined,
-  }))
-  return { media, missing, mediaResolved: files.size, mediaTotal: mediaIds.length }
+  const { sources, missing } = resolveMediaSources(workspace, mediaIds, { quality })
+  const proxied = []
+  const media = [...sources.entries()].map(([id, source]) => {
+    if (source.quality === 'proxy') proxied.push(id)
+    return {
+      mediaId: id,
+      url: mediaUrlOf(id, quality),
+      metadata: readMediaMetadata(workspace, id) ?? undefined,
+    }
+  })
+  return { media, missing, proxied, mediaResolved: sources.size, mediaTotal: mediaIds.length }
 }
 
 /** Load a project from a job's `project` id/path or inline `projectObject`. */
@@ -190,11 +206,13 @@ export function prepareJob(workspace, jobArgs, mediaUrlOf) {
   const range = hasRange
     ? { inFrame: inPoint ?? 0, outFrame: outPoint ?? Number.POSITIVE_INFINITY }
     : null
-  const { media, missing, mediaResolved, mediaTotal } = resolveProjectMedia(
+  const mediaQuality = jobArgs.mediaQuality ?? 'original'
+  const { media, missing, proxied, mediaResolved, mediaTotal } = resolveProjectMedia(
     workspace,
     project,
     mediaUrlOf,
     range,
+    { quality: mediaQuality },
   )
 
   const outName = `${(project.name ?? 'freecut-export').replace(/[^\w.-]+/g, '_')}.${settings.container}`
@@ -209,6 +227,8 @@ export function prepareJob(workspace, jobArgs, mediaUrlOf) {
     outPoint,
     media,
     missing,
+    proxied,
+    mediaQuality,
     mediaResolved,
     mediaTotal,
     outPath,
@@ -289,6 +309,15 @@ export async function renderJob(
       message: `${job.missing.length} media source(s) not found on disk: ${job.missing.join(', ')}`,
       details: { mediaIds: job.missing },
     })
+  // A proxy is a light stand-in for previewing, so an export built from one is
+  // worth saying out loud: it looks finished and it isn't.
+  if (job.proxied?.length > 0) {
+    preparationWarnings.push({
+      code: 'PROXY_MEDIA',
+      message: `${job.proxied.length} source(s) rendered from a proxy, not the original: ${job.proxied.join(', ')}`,
+      details: { mediaIds: job.proxied },
+    })
+  }
   // audioCodecSupported=false on media WITHOUT any audio track is a metadata
   // authoring bug (seen with external registration scripts) — only warn when
   // there is an actual audio track that can't be decoded.

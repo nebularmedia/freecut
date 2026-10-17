@@ -131,7 +131,9 @@
       "localAiDescription": "Unload resident runtimes or clear cached model downloads.",
       "clearCacheConfirmTitle": "Clear project cache?",
       "clearCacheConfirmDescription": "This will delete cached waveforms, filmstrips, GIF frames, and decoded audio for the current project ({{count}} media items). These will be regenerated automatically when needed. Your project data, media files, thumbnails, and proxies will not be affected.",
-      "clearCache": "Clear Cache"
+      "clearCache": "Clear Cache",
+      "autoProxyHeavyMedia": "Auto-proxy heavy media",
+      "autoProxyHeavyMediaDescription": "Generate a lighter copy on its own for 4K, high frame rates and codecs the GPU cannot decode"
     },
     "toasts": {
       "projectCacheCleared": "Project cache cleared",

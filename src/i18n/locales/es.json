@@ -131,7 +131,9 @@
       "localAiDescription": "Descarga los runtimes residentes o borra las descargas de modelos en caché.",
       "clearCacheConfirmTitle": "¿Borrar la caché del proyecto?",
       "clearCacheConfirmDescription": "Esto eliminará las formas de onda, miniaturas de vídeo, fotogramas GIF y audio decodificado en caché del proyecto actual ({{count}} elementos multimedia). Se regenerarán automáticamente cuando sea necesario. Tus datos del proyecto, archivos multimedia, miniaturas y proxies no se verán afectados.",
-      "clearCache": "Borrar caché"
+      "clearCache": "Borrar caché",
+      "autoProxyHeavyMedia": "Proxy automático para material pesado",
+      "autoProxyHeavyMediaDescription": "Genera solo una copia ligera para 4K, frecuencias altas y códecs que la GPU no puede decodificar"
     },
     "toasts": {
       "projectCacheCleared": "Caché del proyecto borrada",

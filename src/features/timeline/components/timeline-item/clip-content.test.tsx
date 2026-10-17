@@ -74,6 +74,10 @@ function addUnrelatedComposition(id: string): void {
 
 describe('ClipContent', () => {
   beforeEach(() => {
+    // These cases describe the FreeCut level-of-detail ladder by its pixel
+    // numbers, so pin the motion mode that owns them. CapCut motion keeps
+    // thumbnails on much narrower clips and has its own case below.
+    useSettingsStore.setState({ uiMotionMode: 'freecut' })
     useTimelineStore.setState({ fps: 30 })
     _resetZoomStoreForTest()
     useZoomStore.setState({
@@ -125,13 +129,7 @@ describe('ClipContent', () => {
     const onRender = vi.fn()
     const view = render(
       <Profiler id="compact-clip-content" onRender={onRender}>
-        <ClipContent
-          item={item}
-          clipLeftFrames={0}
-          clipWidthFrames={30}
-          fps={30}
-          isCompactWidth
-        />
+        <ClipContent item={item} clipLeftFrames={0} clipWidthFrames={30} fps={30} isCompactWidth />
       </Profiler>,
     )
     const initialCommitCount = onRender.mock.calls.length
@@ -831,12 +829,7 @@ describe('ClipContent', () => {
     const onRender = vi.fn()
     render(
       <Profiler id="retained-live-zoom-out-video" onRender={onRender}>
-        <ClipContent
-          item={item}
-          clipLeftFrames={0}
-          clipWidthFrames={30}
-          fps={30}
-        />
+        <ClipContent item={item} clipLeftFrames={0} clipWidthFrames={30} fps={30} />
       </Profiler>,
     )
 
@@ -1005,6 +998,64 @@ describe('ClipContent', () => {
     })
     expect(await screen.findByTestId('clip-waveform')).toBeInTheDocument()
     expect(onRender.mock.calls.length).toBeGreaterThan(settledCommitCount)
+  })
+
+  it('shows a photo thumbnail when the item carries only a media id', async () => {
+    // Projects authored outside the drag-and-drop path save image items with an
+    // empty `src` and the media id alone. The filmstrip resolves the picture
+    // from the library, so that is all it needs.
+    useSettingsStore.setState({ showFilmstrips: true, enableFilmstripExtraction: true })
+    const item: TimelineItem = {
+      id: 'authored-image',
+      type: 'image',
+      trackId: 'track-1',
+      from: 0,
+      durationInFrames: 60,
+      label: 'Authored image',
+      mediaId: 'media-1',
+      src: '',
+    } as TimelineItem
+
+    render(<ClipContent item={item} clipLeftFrames={0} clipWidthFrames={96} fps={30} />)
+
+    expect(await screen.findByTestId('image-filmstrip')).toBeInTheDocument()
+  })
+
+  it('keeps thumbnails on very short clips in CapCut motion', async () => {
+    useSettingsStore.setState({ showFilmstrips: true, enableFilmstripExtraction: true })
+    const item: TimelineItem = {
+      id: 'short-image',
+      type: 'image',
+      trackId: 'track-1',
+      from: 0,
+      durationInFrames: 7,
+      label: 'Short image',
+      mediaId: 'media-1',
+      src: '',
+    } as TimelineItem
+
+    // 7 frames at 30fps and 50px per second is a clip under 12px wide: below
+    // the FreeCut floor, above the CapCut one.
+    act(() => {
+      useZoomStore.setState({
+        level: 0.5,
+        pixelsPerSecond: 50,
+        contentLevel: 0.5,
+        contentPixelsPerSecond: 50,
+      })
+    })
+
+    const { rerender } = render(
+      <ClipContent item={item} clipLeftFrames={0} clipWidthFrames={7} fps={30} />,
+    )
+    expect(screen.queryByTestId('image-filmstrip')).not.toBeInTheDocument()
+
+    act(() => {
+      useSettingsStore.setState({ uiMotionMode: 'capcut' })
+    })
+    rerender(<ClipContent item={item} clipLeftFrames={0} clipWidthFrames={7} fps={30} />)
+
+    expect(await screen.findByTestId('image-filmstrip')).toBeInTheDocument()
   })
 
   it('isolates detailed images from waveform and composition updates', async () => {

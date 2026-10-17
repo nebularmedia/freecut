@@ -1,4 +1,5 @@
 export { mediaProcessorService } from '@/features/media-library/services/media-processor-service'
+export { imagePreviewCache } from '@/features/media-library/services/image-preview-cache'
 export {
   resolveMediaUrl,
   resolveProxyUrl,

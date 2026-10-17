@@ -7,6 +7,7 @@ All notable changes to FreeCut. Weekly CalVer: `YYYY.MM.DD` = the Monday of the 
 ## [Current] — week of 2026-07-20
 
 ### Added
+- Stabilize shaky video from the media library, at three strengths, into a new steadied clip
 - Solid color and gradient layers in Motion
 - Crop clips with handles directly on the canvas, including compound clips
 - Promote any clip to a Motion Clip and open it in the Motion editor

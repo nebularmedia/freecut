@@ -131,7 +131,9 @@
       "localAiDescription": "卸载常驻运行时或清除已缓存的模型下载。",
       "clearCacheConfirmTitle": "清除项目缓存？",
       "clearCacheConfirmDescription": "这将删除当前项目（{{count}} 个媒体项）的缓存波形、视频缩略图条、GIF 帧和已解码音频。需要时会自动重新生成。你的项目数据、媒体文件、缩略图和代理不会受到影响。",
-      "clearCache": "清除缓存"
+      "clearCache": "清除缓存",
+      "autoProxyHeavyMedia": "重负载素材自动生成代理",
+      "autoProxyHeavyMediaDescription": "为 4K、高帧率以及 GPU 无法解码的编解码器自动生成轻量副本"
     },
     "toasts": {
       "projectCacheCleared": "已清除项目缓存",

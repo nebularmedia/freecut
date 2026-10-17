@@ -10,12 +10,19 @@ import {
 import type { EditorDensityPresetName } from '@/config/editor-layout'
 import { DEFAULT_EDITOR_DENSITY_PRESET, normalizeEditorDensityPreset } from '@/config/editor-layout'
 import {
-  HOTKEYS,
   normalizeHotkeyBinding,
   sanitizeHotkeyOverrides,
   type HotkeyKey,
   type HotkeyOverrideMap,
 } from '@/config/hotkeys'
+import {
+  DEFAULT_UI_MOTION_MODE,
+  getBaseHotkeys,
+  normalizeTimelineWheelSetting,
+  normalizeUiMotionMode,
+  type TimelineWheelSetting,
+  type UiMotionMode,
+} from '@/config/ui-motion'
 import { CAPTION_STYLE_PRESETS } from '@/shared/typography/caption-style-presets'
 
 /**
@@ -39,6 +46,16 @@ interface AppSettings {
   // Performance
   maxUndoHistory: number
   autoSaveInterval: number // minutes (0 = disabled)
+  /**
+   * Queue a 960x540 proxy on its own for media too heavy to preview from the
+   * original — 4K, high frame rates, and codecs the GPU has to hand to the CPU.
+   * The judgement is in `media-library/utils/heavy-media.ts`.
+   *
+   * On by default: the editor stuttering until someone finds the button is a
+   * worse first impression than a transcode nobody asked for. Off is here for
+   * a machine where the transcode itself is the thing in the way.
+   */
+  autoProxyHeavyMedia: boolean
 
   // Whisper defaults
   defaultWhisperModel: MediaTranscriptModel
@@ -58,6 +75,17 @@ interface AppSettings {
   // Caption style preset id applied automatically to captions generated from
   // transcripts / AI captioning (when not inheriting an existing caption's style).
   defaultCaptionStylePresetId: string
+
+  // UI motion mode — which editor's muscle memory the mouse and keyboard follow.
+  // See config/ui-motion. `uiMotionModeChosen` stays false until the user has
+  // actually answered the picker, so the first-run card only shows once.
+  uiMotionMode: UiMotionMode
+  uiMotionModeChosen: boolean
+  // Bare wheel over the timeline. `auto` follows the motion mode.
+  timelineWheel: TimelineWheelSetting
+  // Main track magnet. null follows the motion mode; a boolean is the user's
+  // own answer, kept across mode switches.
+  mainTrackMagnet: boolean | null
 
   // Keyboard shortcuts
   hotkeyOverrides: HotkeyOverrideMap
@@ -114,6 +142,7 @@ export function resolveCaptioningIntervalSec(
 
 interface SettingsActions {
   setSetting: <K extends keyof AppSettings>(key: K, value: AppSettings[K]) => void
+  setUiMotionMode: (mode: UiMotionMode) => void
   setHotkeyBinding: (key: HotkeyKey, binding: string) => void
   unbindHotkeyBinding: (key: HotkeyKey) => void
   replaceHotkeyOverrides: (overrides: HotkeyOverrideMap) => void
@@ -150,6 +179,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   // Performance
   maxUndoHistory: 50,
   autoSaveInterval: 5, // Auto-save every 5 min by default — guards against tab crashes / lost work
+  autoProxyHeavyMedia: true,
 
   // Whisper defaults
   defaultWhisperModel: DEFAULT_WHISPER_MODEL,
@@ -165,6 +195,12 @@ const DEFAULT_SETTINGS: AppSettings = {
 
   // Caption styling default
   defaultCaptionStylePresetId: DEFAULT_CAPTION_STYLE_PRESET_ID,
+
+  // UI motion mode
+  uiMotionMode: DEFAULT_UI_MOTION_MODE,
+  uiMotionModeChosen: false,
+  timelineWheel: 'auto',
+  mainTrackMagnet: null,
 
   // Keyboard shortcuts
   hotkeyOverrides: {},
@@ -215,10 +251,22 @@ export const useSettingsStore = create<SettingsStore>()(
           return { [key]: value }
         }),
 
+      // Picking a mode is a deliberate answer, so it also closes the first-run
+      // card — even when the mode picked is the one already active.
+      setUiMotionMode: (mode) =>
+        set((state) => {
+          const normalizedMode = normalizeUiMotionMode(mode)
+          if (state.uiMotionMode === normalizedMode && state.uiMotionModeChosen) {
+            return state
+          }
+          return { uiMotionMode: normalizedMode, uiMotionModeChosen: true }
+        }),
+
       setHotkeyBinding: (key, binding) =>
         set((state) => {
           const normalizedBinding = normalizeHotkeyBinding(binding)
-          if (!normalizedBinding || normalizedBinding === HOTKEYS[key]) {
+          // A binding that matches the active mode's base is not an override.
+          if (!normalizedBinding || normalizedBinding === getBaseHotkeys(state.uiMotionMode)[key]) {
             if (!(key in state.hotkeyOverrides)) {
               return state
             }
@@ -256,7 +304,10 @@ export const useSettingsStore = create<SettingsStore>()(
 
       replaceHotkeyOverrides: (overrides) =>
         set((state) => {
-          const normalizedOverrides = sanitizeHotkeyOverrides(overrides)
+          const normalizedOverrides = sanitizeHotkeyOverrides(
+            overrides,
+            getBaseHotkeys(state.uiMotionMode),
+          )
 
           if (areHotkeyOverridesEqual(state.hotkeyOverrides, normalizedOverrides)) {
             return state
@@ -313,12 +364,23 @@ export const useSettingsStore = create<SettingsStore>()(
         const captioningIntervalUnit = normalizeCaptioningIntervalUnit(
           typedState.captioningIntervalUnit,
         )
+        // Overrides are stored relative to the mode that was active when they
+        // were recorded, so the mode has to be resolved before they are.
+        const uiMotionMode = normalizeUiMotionMode(typedState.uiMotionMode)
 
         return {
           ...currentState,
           ...typedState,
           defaultWhisperModel: normalizeSelectableWhisperModel(typedState.defaultWhisperModel),
-          hotkeyOverrides: sanitizeHotkeyOverrides(typedState.hotkeyOverrides),
+          uiMotionMode,
+          uiMotionModeChosen: typedState.uiMotionModeChosen === true,
+          timelineWheel: normalizeTimelineWheelSetting(typedState.timelineWheel),
+          mainTrackMagnet:
+            typeof typedState.mainTrackMagnet === 'boolean' ? typedState.mainTrackMagnet : null,
+          hotkeyOverrides: sanitizeHotkeyOverrides(
+            typedState.hotkeyOverrides,
+            getBaseHotkeys(uiMotionMode),
+          ),
           editorDensity: normalizeEditorDensityPreset(typedState.editorDensity),
           captioningIntervalUnit,
           captioningIntervalValue: clampCaptioningIntervalValue(

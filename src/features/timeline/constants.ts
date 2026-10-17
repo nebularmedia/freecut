@@ -81,6 +81,14 @@ export const MOMENTUM_REF_FRAME_MS = 1000 / 60
 export const SCROLL_SMOOTHING = 0.15
 export const SCROLL_GESTURE_TIMEOUT = 100 // ms
 
+// Direct-step scrolling (CapCut motion) covers the same ground a glide would,
+// only all at once: a glide ramps to `delta * SCROLL_SMOOTHING` and then coasts
+// under SCROLL_FRICTION decay, summing to delta * SMOOTHING / (1 - FRICTION).
+// Deriving the step from those constants keeps both feels travelling the same
+// distance per notch, so switching mode changes HOW the timeline moves and
+// never HOW FAR.
+export const SCROLL_STEP_GAIN = SCROLL_SMOOTHING / (1 - SCROLL_FRICTION)
+
 // Zoom momentum (shared between ctrl+scroll and slider)
 export const ZOOM_FRICTION = 0 // 0 = instant zoom (no momentum drift after gesture)
 export const ZOOM_MIN_VELOCITY = 0.001

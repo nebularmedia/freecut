@@ -201,3 +201,51 @@ describe('ItemContextMenu captions', () => {
     expect(screen.getByRole('button', { name: 'Regenerate Captions' })).toBeInTheDocument()
   })
 })
+
+describe('ItemContextMenu stabilization', () => {
+  beforeEach(() => {
+    useSelectionStore.setState({
+      selectedItemIds: [],
+      selectedMarkerId: null,
+      selectedTransitionId: null,
+      selectedTrackId: null,
+      selectedTrackIds: [],
+      activeTrackId: null,
+      selectionType: null,
+    })
+  })
+
+  it('offers a strength per crop budget and reports what each one costs', () => {
+    const onStabilize = vi.fn()
+    renderContextMenu({
+      stabilizeActions: { canStabilize: true, isStabilizing: false, onStabilize },
+    })
+
+    // The label has to name the price, because the crop is the whole trade.
+    expect(screen.getByRole('button', { name: 'Gentle — 5% crop' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Standard — 10% crop' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Strong — 15% crop' })).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Strong — 15% crop' }))
+    expect(onStabilize).toHaveBeenCalledWith('strong')
+  })
+
+  it('replaces the strengths with a disabled notice while a render is running', () => {
+    const onStabilize = vi.fn()
+    renderContextMenu({
+      stabilizeActions: { canStabilize: true, isStabilizing: true, onStabilize },
+    })
+
+    expect(screen.getByRole('button', { name: 'Stabilizing…' })).toBeDisabled()
+    expect(screen.queryByRole('button', { name: 'Standard — 10% crop' })).not.toBeInTheDocument()
+  })
+
+  it('stays out of the menu for clips that cannot be stabilized', () => {
+    renderContextMenu({
+      stabilizeActions: { canStabilize: false, isStabilizing: false, onStabilize: vi.fn() },
+    })
+
+    expect(screen.queryByRole('button', { name: 'Stabilize Clip' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Standard — 10% crop' })).not.toBeInTheDocument()
+  })
+})

@@ -96,6 +96,15 @@ interface AudioStream {
   readonly packets: AsyncGenerator<EncodedPacketInstance>
 }
 
+/**
+ * Source time span to copy, for renders that cover only part of their source. `offsetSeconds` is
+ * subtracted from every packet so the output starts at zero.
+ */
+export interface AudioCopyRange {
+  offsetSeconds: number
+  endSeconds: number
+}
+
 class AudioCopier {
   private nextPacket: EncodedPacketInstance | null = null
   private meta: EncodedAudioChunkMetadata | undefined
@@ -103,17 +112,38 @@ class AudioCopier {
   /** Null once exhausted, and from the start when there is no audio to copy. */
   private stream: AudioStream | null
 
-  private constructor(stream: AudioStream | null, decoderConfig: AudioDecoderConfig | null) {
+  private constructor(
+    stream: AudioStream | null,
+    decoderConfig: AudioDecoderConfig | null,
+    private readonly range: AudioCopyRange | null,
+  ) {
     this.stream = stream
     this.meta = decoderConfig ? { decoderConfig } : undefined
   }
 
   static inert(): AudioCopier {
-    return new AudioCopier(null, null)
+    return new AudioCopier(null, null, null)
   }
 
-  static enabled(stream: AudioStream, decoderConfig: AudioDecoderConfig | null): AudioCopier {
-    return new AudioCopier(stream, decoderConfig)
+  static enabled(
+    stream: AudioStream,
+    decoderConfig: AudioDecoderConfig | null,
+    range: AudioCopyRange | null,
+  ): AudioCopier {
+    return new AudioCopier(stream, decoderConfig, range)
+  }
+
+  /**
+   * Shift a packet onto the output's timeline. Whole-source renders pass through untouched; a
+   * ranged render rebases to zero and stops at the end of the span.
+   */
+  private rebase(packet: EncodedPacketInstance): EncodedPacketInstance | null {
+    if (!this.range) return packet
+    if (packet.timestamp >= this.range.endSeconds) return null
+    return packet.clone({
+      timestamp: packet.timestamp - this.range.offsetSeconds,
+      duration: packet.duration,
+    })
   }
 
   /** Emit every packet whose presentation time has been reached by the video track. */
@@ -128,10 +158,19 @@ class AudioCopier {
         this.stream = null
         return
       }
-      if (packet.timestamp > timestamp) return
+
+      const rebased = this.rebase(packet)
+      if (!rebased) {
+        // Past the end of the range: the rest of the track belongs to a part of the source this
+        // render does not cover.
+        this.nextPacket = null
+        this.stream = null
+        return
+      }
+      if (rebased.timestamp > timestamp) return
       this.nextPacket = null
 
-      const clamped = clampPacketToTimeline(packet)
+      const clamped = clampPacketToTimeline(rebased)
       if (!clamped) continue
 
       // `meta` carries the decoder config and is only required on the first packet emitted.
@@ -150,6 +189,7 @@ export async function setupAudioCopy(
   mb: Mediabunny,
   input: InputInstance,
   output: OutputInstance,
+  range?: AudioCopyRange,
 ): Promise<AudioCopier> {
   const track = await input.getPrimaryAudioTrack()
   const codec = track?.codec
@@ -162,8 +202,12 @@ export async function setupAudioCopy(
 
   const source = new mb.EncodedAudioPacketSource(codec)
   output.addAudioTrack(source)
-  const packets = new mb.EncodedPacketSink(track).packets()
-  return AudioCopier.enabled({ source, packets }, await track.getDecoderConfig())
+  const sink = new mb.EncodedPacketSink(track)
+  // Every audio packet is independently decodable, so seeking to a "key packet" is just seeking.
+  // Starting mid-track without one would hand the muxer packets from before the range.
+  const startPacket = range ? await sink.getKeyPacket(range.offsetSeconds) : null
+  const packets = sink.packets(startPacket ?? undefined)
+  return AudioCopier.enabled({ source, packets }, await track.getDecoderConfig(), range ?? null)
 }
 
 export async function getSourceBlobFromOpfs(path: string, mimeType?: string): Promise<Blob> {
@@ -314,9 +358,20 @@ async function pickCodec(
   )
 }
 
+/**
+ * Where an encoded render lands.
+ *
+ * A worker streams to an OPFS scratch file because a full-length render must never be held in
+ * memory. The headless harness has no OPFS to hand back to Node and instead collects the bytes in
+ * memory, which is fine there because it renders one clip at a time.
+ */
+export type RenderDestination =
+  | { kind: 'stream'; writable: FileSystemWritableFileStream }
+  | { kind: 'buffer' }
+
 export async function createMp4Encoder(
   mb: Mediabunny,
-  writable: FileSystemWritableFileStream,
+  destination: RenderDestination,
   frame: { width: number; height: number; fps: number },
 ) {
   const settings: VideoEncodeSettings = {
@@ -327,12 +382,21 @@ export async function createMp4Encoder(
   const codec = await pickCodec(mb, format, settings, frame)
   logger.info('Encoding render output', { codec, width: frame.width, height: frame.height })
 
+  const bufferTarget = destination.kind === 'buffer' ? new mb.BufferTarget() : null
   const output = new mb.Output({
     format,
-    target: new mb.StreamTarget(writable, { chunked: true, chunkSize: STREAM_CHUNK_SIZE_BYTES }),
+    target:
+      destination.kind === 'buffer'
+        ? bufferTarget!
+        : new mb.StreamTarget(destination.writable, {
+            chunked: true,
+            chunkSize: STREAM_CHUNK_SIZE_BYTES,
+          }),
   })
   const videoSource = addVideoTrack(mb, output, codec, settings, frame.fps)
-  return { output, videoSource, codec }
+  /** Populated only for buffer destinations, and only after `output.finalize()`. */
+  const takeBuffer = () => bufferTarget?.buffer ?? null
+  return { output, videoSource, codec, takeBuffer }
 }
 
 /**

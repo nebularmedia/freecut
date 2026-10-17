@@ -7,6 +7,7 @@ import { useSelectionStore } from '@/shared/state/selection'
 import { useTimelineStore } from '../../stores/timeline-store'
 import { useTimelineCommandStore } from '../../stores/timeline-command-store'
 import { useKeyframeSelectionStore } from '../../stores/keyframe-selection-store'
+import { useSettingsStore } from '@/features/timeline/deps/settings'
 import { useEditingShortcuts } from './use-editing-shortcuts'
 import type { TimelineTrack, VideoItem } from '@/types/timeline'
 
@@ -83,6 +84,9 @@ function createHotkeyEvent(): HotkeyEvent {
 describe('useEditingShortcuts delete ownership', () => {
   beforeEach(() => {
     useHotkeysMock.mockClear()
+    // These cases assert the FreeCut layout by name (Alt+C, Ctrl+Del), so pin
+    // the motion mode that owns it instead of riding the app-wide default.
+    useSettingsStore.setState({ uiMotionMode: 'freecut', hotkeyOverrides: {} })
     useTimelineCommandStore.getState().clearHistory()
     useSelectionStore.setState({
       selectedItemIds: [],

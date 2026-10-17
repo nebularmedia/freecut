@@ -8,11 +8,17 @@ import { useZoomStore, getZoomTo100Handler } from '../../stores/zoom-store'
 import { usePlaybackStore } from '@/shared/state/playback'
 import { HOTKEY_OPTIONS } from '@/config/hotkeys'
 import type { TimelineShortcutCallbacks } from '../use-timeline-shortcuts'
-import { useResolvedHotkeys, useSettingsStore } from '@/features/timeline/deps/settings'
+import {
+  useResolvedHotkeys,
+  useSettingsStore,
+  useUiMotionProfile,
+} from '@/features/timeline/deps/settings'
 
 export function useUIShortcuts(callbacks: TimelineShortcutCallbacks) {
   const hotkeys = useResolvedHotkeys()
   const toggleSnap = useTimelineStore((s) => s.toggleSnap)
+  const mainTrackMagnet = useUiMotionProfile().mainTrackMagnet
+  const setSetting = useSettingsStore((s) => s.setSetting)
   const zoomIn = useZoomStore((s) => s.zoomIn)
   const zoomOut = useZoomStore((s) => s.zoomOut)
 
@@ -50,7 +56,7 @@ export function useUIShortcuts(callbacks: TimelineShortcutCallbacks) {
     [callbacks],
   )
 
-  // UI: S - Toggle Snap
+  // UI: N - Toggle Snap
   useHotkeys(
     hotkeys.TOGGLE_SNAP,
     (event) => {
@@ -61,7 +67,20 @@ export function useUIShortcuts(callbacks: TimelineShortcutCallbacks) {
     [toggleSnap],
   )
 
-  // UI: Shift+S - Toggle Canvas (gizmo) Snap — independent from timeline snap.
+  // UI: P - Toggle the main track magnet (CapCut motion)
+  useHotkeys(
+    hotkeys.TOGGLE_MAIN_TRACK_MAGNET,
+    (event) => {
+      event.preventDefault()
+      // The stored value is an override over the mode default, so it is
+      // flipped against what the profile currently resolves to.
+      setSetting('mainTrackMagnet', !mainTrackMagnet)
+    },
+    HOTKEY_OPTIONS,
+    [mainTrackMagnet, setSetting],
+  )
+
+  // UI: Shift+N - Toggle Canvas (gizmo) Snap — independent from timeline snap.
   useHotkeys(
     hotkeys.TOGGLE_CANVAS_SNAP,
     (event) => {

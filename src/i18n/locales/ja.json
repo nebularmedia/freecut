@@ -131,7 +131,9 @@
       "localAiDescription": "常駐ランタイムをアンロードするか、キャッシュされたモデルのダウンロードをクリアします。",
       "clearCacheConfirmTitle": "プロジェクトのキャッシュをクリアしますか？",
       "clearCacheConfirmDescription": "現在のプロジェクト ({{count}} 件のメディア) のキャッシュされた波形、動画サムネイル帯、GIF フレーム、デコード済みオーディオを削除します。必要に応じて自動的に再生成されます。プロジェクトデータ、メディアファイル、サムネイル、プロキシは影響を受けません。",
-      "clearCache": "キャッシュをクリア"
+      "clearCache": "キャッシュをクリア",
+      "autoProxyHeavyMedia": "重いメディアの自動プロキシ",
+      "autoProxyHeavyMediaDescription": "4K、高フレームレート、GPU でデコードできないコーデックに対して軽量コピーを自動生成します"
     },
     "toasts": {
       "projectCacheCleared": "プロジェクトのキャッシュをクリアしました",

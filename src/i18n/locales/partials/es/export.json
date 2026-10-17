@@ -10,10 +10,11 @@
     },
     "complete": {
       "audioSuccess": "Tu audio está listo para descargar.",
-      "download": "Descargar",
+      "download": "Descargar copia",
       "fileSizeLabel": "Tamaño",
       "timeTakenLabel": "Tiempo",
-      "videoSuccess": "Tu vídeo está listo para descargar."
+      "videoSuccess": "Tu vídeo está listo y ya está guardado en el proyecto.",
+      "savedInProject": "Guardado en"
     },
     "dialog": {
       "descCancelled": "La exportación se canceló antes de terminar.",

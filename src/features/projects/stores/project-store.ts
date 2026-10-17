@@ -15,6 +15,7 @@ import {
   softDeleteProject,
   restoreProject as restoreProjectDB,
   getTrashedProjectMediaIds,
+  assertNoAdoptedIdea,
 } from '@/infrastructure/storage'
 import { createProjectObject, duplicateProject } from '../utils/project-helpers'
 // v3: Lazy-load media service for cascade operations
@@ -367,6 +368,11 @@ export const useProjectStore = create<ProjectState & ProjectActions>()(
 
         permanentlyDeleteProject: async (id: string) => {
           try {
+            // A project holding an adopted idea (`_idea/`) is never destroyed —
+            // that folder is the only copy of the brief. Checked HERE and not
+            // only in `deleteProjectDB`, because media cleanup below is already
+            // irreversible by the time the directory removal would refuse.
+            await assertNoAdoptedIdea(id)
             // Read the trashed project's media links so we can clean up
             // any media that becomes fully-dereferenced once this project
             // is gone. (deleteAllMediaFromProject reads media-links via

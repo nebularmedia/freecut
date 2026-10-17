@@ -131,7 +131,9 @@
       "localAiDescription": "Descarrega os runtimes residentes ou limpa os downloads de modelos em cache.",
       "clearCacheConfirmTitle": "Limpar o cache do projeto?",
       "clearCacheConfirmDescription": "Isso excluirá as formas de onda, miniaturas de vídeo, quadros de GIF e áudio decodificado em cache do projeto atual ({{count}} itens de mídia). Eles serão regerados automaticamente quando necessário. Seus dados de projeto, arquivos de mídia, miniaturas e proxies não serão afetados.",
-      "clearCache": "Limpar cache"
+      "clearCache": "Limpar cache",
+      "autoProxyHeavyMedia": "Proxy automático para mídia pesada",
+      "autoProxyHeavyMediaDescription": "Gera sozinho uma cópia mais leve para 4K, taxas de quadros altas e codecs que a GPU não decodifica"
     },
     "toasts": {
       "projectCacheCleared": "Cache do projeto limpo",

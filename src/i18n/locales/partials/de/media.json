@@ -300,6 +300,10 @@
       "importAnyway": "Trotzdem importieren",
       "note": "Konvertiere sie für bessere Kompatibilität in MP4 (H.264/AAC) oder WebM.",
       "title": "Codec nicht unterstützt"
+    },
+    "autoProxy": {
+      "queued_one": "Erstelle eine leichtere Kopie von 1 schweren Clip, damit die Wiedergabe mithält",
+      "queued_other": "Erstelle leichtere Kopien von {{count}} schweren Clips, damit die Wiedergabe mithält"
     }
   }
 }

@@ -29,6 +29,31 @@ export function assertSinglePathComponent(value, label = 'id') {
   return value
 }
 
+const LOOPBACK_HOSTS = new Set(['127.0.0.1', 'localhost', '[::1]', '::1'])
+
+/**
+ * Validate a URL that this server will fetch on the page's behalf (see
+ * upstream-media.mjs). https only — http is allowed on loopback so tests can
+ * stand up a fake upstream.
+ *
+ * Upstream URLs are authored in the workspace by whoever runs the render, never
+ * taken from a request, and every redirect hop is re-checked here so a redirect
+ * can't walk the fetch off to another scheme.
+ */
+export function assertUpstreamMediaUrl(value, label = 'media link url') {
+  let url
+  try {
+    url = new URL(String(value))
+  } catch {
+    throw new HttpError(400, 'INVALID_MEDIA_LINK', `${label} is not a valid URL`)
+  }
+  const loopback = LOOPBACK_HOSTS.has(url.hostname)
+  if (url.protocol !== 'https:' && !(url.protocol === 'http:' && loopback)) {
+    throw new HttpError(400, 'INVALID_MEDIA_LINK', `${label} must be https`)
+  }
+  return url.toString()
+}
+
 function isContained(root, candidate) {
   const relative = path.relative(root, candidate)
   return (

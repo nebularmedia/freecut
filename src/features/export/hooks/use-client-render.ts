@@ -39,6 +39,21 @@ import { createLogger, createOperationId } from '@/shared/logging/logger'
 
 const log = createLogger('Export')
 
+/**
+ * Un nombre de proyecto convertido en nombre de fichero.
+ *
+ * Los nombres de la casa ya son casi seguros —`concepto_MARCA_fecha`— pero uno
+ * escrito a mano en el editor puede traer barras o dos puntos, y eso no es un
+ * fichero: es una carpeta que no existe o un error de escritura.
+ */
+function sanitizeExportName(nombre: string | undefined): string {
+  return (nombre ?? '')
+    .replace(/[/:*?"<>|]/g, '-')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 120)
+}
+
 type ClientRenderStatus =
   | 'idle'
   | 'preparing'
@@ -59,6 +74,13 @@ interface UseClientRenderReturn {
   status: ClientRenderStatus
   error: string | null
   result: ClientRenderResult | null
+  /**
+   * Ruta dentro del workspace donde ha quedado el fichero exportado, o null si
+   * todavía no se ha guardado ahí. Es lo que enseña el diálogo al terminar.
+   */
+  savedPath: string | null
+  /** Por qué no se pudo guardar dentro del proyecto, para poder decirlo. */
+  saveError: string | null
 
   // Actions
   startExport: (settings: ExportSettings | ExtendedExportSettings) => Promise<void>
@@ -84,6 +106,15 @@ export function useClientRender(): UseClientRenderReturn {
   const [status, setStatus] = useState<ClientRenderStatus>('idle')
   const [error, setError] = useState<string | null>(null)
   const [result, setResult] = useState<ClientRenderResult | null>(null)
+  /**
+   * Dónde ha quedado dentro del workspace, para poder DECIRLO.
+   *
+   * Guardarlo sin enseñarlo dejaba al que exporta con la misma duda de siempre
+   * —"¿dónde está?"— y con la carpeta de Descargas como única respuesta visible.
+   */
+  const [savedPath, setSavedPath] = useState<string | null>(null)
+  /** Por qué no se pudo guardar dentro del proyecto. Null cuando fue bien. */
+  const [saveError, setSaveError] = useState<string | null>(null)
   const resultRef = useRef<ClientRenderResult | null>(null)
 
   // AbortController for cancellation
@@ -373,11 +404,56 @@ export function useClientRender(): UseClientRenderReturn {
     else if (mime.includes('audio/wav') || mime.includes('wave')) extension = 'wav'
     else if (mime.includes('audio/aac') || mime.includes('adts')) extension = 'aac'
 
-    const baseName = `export-${Date.now()}`
+    /*
+     * El nombre sale del PROYECTO, no del reloj.
+     *
+     * `export-1786642655343.mp4` en la carpeta de Descargas no dice de qué
+     * cliente es ni de qué montaje: para saberlo hay que abrirlo. El nombre del
+     * proyecto ya lleva concepto, marca y fecha.
+     */
+    const proyecto = useProjectStore.getState().currentProject
+    const baseName = sanitizeExportName(proyecto?.name) || `export-${Date.now()}`
     a.download = `${baseName}.${extension}`
     document.body.appendChild(a)
     a.click()
     document.body.removeChild(a)
+
+    /*
+     * Y ADEMÁS queda dentro del proyecto, en `projects/<id>/exports/`.
+     *
+     * Descargar era la única salida del botón de exportar —la cola sí escribía
+     * en el workspace, el botón no—, así que el mp4 acababa en la carpeta de
+     * Descargas y fuera del alcance de cualquiera que viniera después a
+     * escribir el copy o a subirlo. Se guarda en los dos sitios: el navegador
+     * te lo da a mano, y la fábrica lo conserva donde se busca.
+     *
+     * Si falla, no se toca la descarga: el fichero ya lo tienes.
+     */
+    /*
+     * Y el porqué SE ENSEÑA cuando falla.
+     *
+     * La primera versión se lo tragaba con un `log.warn`: el diálogo decía
+     * "listo", el fichero no aparecía en el proyecto y no había forma de saber
+     * por qué sin abrir la consola del navegador. Un guardado que puede fallar
+     * en silencio es peor que no guardar.
+     */
+    void (async () => {
+      if (!proyecto?.id) {
+        setSaveError('No hay proyecto abierto: no se sabe en qué carpeta guardarlo')
+        return
+      }
+      try {
+        const { saveExportFile } = await import('@/infrastructure/storage')
+        const guardado = await saveExportFile(proyecto.id, `${baseName}.${extension}`, result.blob)
+        setSavedPath(guardado.relPath)
+        setSaveError(null)
+        log.info('Export saved to the workspace', { path: guardado.relPath })
+      } catch (error) {
+        setSavedPath(null)
+        setSaveError(error instanceof Error ? error.message : String(error))
+        log.error('Could not save the export inside the project', { error })
+      }
+    })()
 
     // Revoke during idle — download has already started by then
     requestIdleCallback(() => URL.revokeObjectURL(url))
@@ -415,6 +491,8 @@ export function useClientRender(): UseClientRenderReturn {
     resultRef.current = null
     void releaseTemporaryExportOutput(previousResult)
     setResult(null)
+    setSavedPath(null)
+    setSaveError(null)
   }, [])
 
   useEffect(
@@ -471,6 +549,8 @@ export function useClientRender(): UseClientRenderReturn {
     status,
     error,
     result,
+    savedPath,
+    saveError,
     startExport,
     cancelExport,
     downloadVideo,

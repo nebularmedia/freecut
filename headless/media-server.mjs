@@ -8,11 +8,14 @@ import path from 'node:path'
 import {
   assertSinglePathComponent,
   decodeRequestPath,
+  HttpError,
   requireGetOrHead,
   sendHttpError,
   serveFile,
   setHttpTimeouts,
 } from './lib/http-security.mjs'
+import { MEDIA_QUALITIES, normalizeMediaSource } from './lib/workspace.mjs'
+import { serveUpstreamMedia } from './upstream-media.mjs'
 
 const MIME = {
   '.mp4': 'video/mp4',
@@ -35,10 +38,31 @@ const MIME = {
 }
 
 /**
- * @param {Map<string,string> | ((mediaId: string) => string | null)} mediaFilesOrResolver
- *   A mediaId->path Map, or a resolver function (mediaId) => absolute path | null.
+ * `?quality=proxy` on a media URL: which copy of the source to serve. The
+ * quality rides on the URL rather than on server state because one warm server
+ * serves many render jobs, and two of them may want different copies.
+ */
+export function requestedMediaQuality(req) {
+  const query = (req.url ?? '').split('?')[1]
+  const value = query ? new URLSearchParams(query).get('quality') : null
+  if (value === null) return undefined
+  if (!MEDIA_QUALITIES.includes(value))
+    throw new HttpError(400, 'INVALID_MEDIA_QUALITY', 'unknown media quality')
+  return value
+}
+
+/** The media URL for an id, carrying the quality the resolver should honour. */
+export function mediaUrlWith(base, mediaId, quality) {
+  const suffix = quality ? `?quality=${encodeURIComponent(quality)}` : ''
+  return `${base}/media/${encodeURIComponent(mediaId)}${suffix}`
+}
+
+/**
+ * @param {Map<string,string> | ((mediaId: string, quality?: string) => string | object | null)} mediaFilesOrResolver
+ *   A mediaId->path Map, or a resolver returning an absolute path or a source
+ *   descriptor (see resolveMediaSource in lib/workspace.mjs).
  * @param {number} [port]  0 = ephemeral
- * @returns {Promise<{ base: string, url: (id: string) => string, close: () => Promise<void> }>}
+ * @returns {Promise<{ base: string, url: (id: string, quality?: string) => string, close: () => Promise<void> }>}
  */
 export async function createMediaServer(mediaFilesOrResolver, port = 0) {
   const resolveMedia =
@@ -61,14 +85,18 @@ export async function createMediaServer(mediaFilesOrResolver, port = 0) {
         return
       }
       const mediaId = assertSinglePathComponent(match[1], 'media id')
-      const filePath = resolveMedia(mediaId)
-      if (!filePath) {
+      const source = normalizeMediaSource(resolveMedia(mediaId, requestedMediaQuality(req)))
+      if (!source) {
         res.writeHead(404)
         res.end('media not found')
         return
       }
-      await serveFile(req, res, filePath, {
-        contentType: MIME[path.extname(filePath).toLowerCase()] ?? 'application/octet-stream',
+      if (source.kind === 'link') {
+        await serveUpstreamMedia(req, res, source)
+        return
+      }
+      await serveFile(req, res, source.path, {
+        contentType: MIME[path.extname(source.path).toLowerCase()] ?? 'application/octet-stream',
         allowRange: true,
       })
     } catch (error) {
@@ -83,7 +111,7 @@ export async function createMediaServer(mediaFilesOrResolver, port = 0) {
 
   return {
     base,
-    url: (mediaId) => `${base}/media/${encodeURIComponent(mediaId)}`,
+    url: (mediaId, quality) => mediaUrlWith(base, mediaId, quality),
     close: () => new Promise((resolve) => server.close(() => resolve())),
   }
 }

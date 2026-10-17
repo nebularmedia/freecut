@@ -5,3 +5,4 @@
 
 export { useSettingsStore } from '@/features/settings/stores/settings-store'
 export { useResolvedHotkeys } from '@/features/settings/hooks/use-resolved-hotkeys'
+export { useUiMotionProfile } from '@/features/settings/hooks/use-ui-motion'

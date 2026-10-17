@@ -6,6 +6,7 @@ import { ErrorBoundary } from '@/app/error-boundary'
 import { PwaInstallPrompt } from '@/app/pwa-install-prompt'
 import { RouteErrorScreen } from '@/app/route-error'
 import { WorkspaceGate } from '@/features/workspace-gate/workspace-gate'
+import { UiMotionFirstRunDialog } from '@/features/settings/components/ui-motion-first-run-dialog'
 import { routeTree } from './routeTree.gen'
 
 // Route errors (thrown from beforeLoad/loader) never reach the React
@@ -79,6 +80,8 @@ export function App() {
       <TooltipProvider delayDuration={300}>
         <WorkspaceGate>
           <RouterProvider router={router} />
+          {/* Asked once, after the workspace is open: FreeCut or CapCut movement. */}
+          <UiMotionFirstRunDialog />
         </WorkspaceGate>
         <GlobalTooltip />
         <PwaInstallPrompt />

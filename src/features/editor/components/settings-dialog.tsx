@@ -372,6 +372,7 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
   const showFilmstrips = useSettingsStore((s) => s.showFilmstrips)
   const enableFilmstripExtraction = useSettingsStore((s) => s.enableFilmstripExtraction)
   const autoSaveInterval = useSettingsStore((s) => s.autoSaveInterval)
+  const autoProxyHeavyMedia = useSettingsStore((s) => s.autoProxyHeavyMedia)
   const maxUndoHistory = useSettingsStore((s) => s.maxUndoHistory)
   const captioningIntervalUnit = useSettingsStore((s) => s.captioningIntervalUnit)
   const captioningIntervalValue = useSettingsStore((s) => s.captioningIntervalValue)
@@ -929,6 +930,21 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
 
                     {activeSection === 'storage' && (
                       <div className="space-y-3">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <Label className="text-sm">
+                              {t('settings.storage.autoProxyHeavyMedia')}
+                            </Label>
+                            <p className="text-xs text-muted-foreground mt-0.5">
+                              {t('settings.storage.autoProxyHeavyMediaDescription')}
+                            </p>
+                          </div>
+                          <Switch
+                            checked={autoProxyHeavyMedia}
+                            onCheckedChange={(v) => setSetting('autoProxyHeavyMedia', v)}
+                          />
+                        </div>
+                        <Separator className="bg-white/8" />
                         <div className="flex items-center justify-between">
                           <div>
                             <Label className="text-sm">
